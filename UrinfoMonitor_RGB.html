@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Urinfo RGB Frame Monitor</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f9; }
+        h1 { color: #333; }
+        #rgbCanvas { 
+            width: 256px; height: 256px; 
+            image-rendering: pixelated; /* Keeps the 64x64 pixels crisp */
+            border: 4px solid #444; border-radius: 8px;
+            background-color: #000; margin: 20px auto; display: block; 
+        }
+        button { 
+            padding: 12px 24px; font-size: 16px; margin: 10px; 
+            cursor: pointer; background-color: #007bff; color: white;
+            border: none; border-radius: 6px; font-weight: bold;
+        }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #status { font-weight: bold; color: #555; font-size: 18px; }
+    </style>
+</head>
+<body>
+
+    <h1>Urinfo BLE - RGB Viewer</h1>
+    
+    <button id="btnConnect">Connect via BLE</button>
+    <button id="btnRequest" disabled>Request New Frame</button>
+    
+    <canvas id="rgbCanvas" width="64" height="64"></canvas>
+    <p id="status">Status: Disconnected</p>
+
+    <script>
+        // ==========================================
+        // IMPORTANT: REPLACE THESE WITH YOUR UUIDS
+        // Check your ble.h file for these values
+        // ==========================================
+        const SERVICE_UUID = "11111111-1111-1111-1111-111111111110"; 
+        const ACTION_UUID  = "11111111-1111-1111-2222-111111111116";
+        const RGB_UUID     = "c2a969f6-16e9-4e08-99e7-5e6086f6a546"; // Must match ble.cpp definition
+
+        let bluetoothDevice;
+        let actionCharacteristic;
+        let rgbCharacteristic;
+        let imgBuffer = new Uint8Array(8192); // 64x64 * 2 bytes
+
+        document.getElementById('btnConnect').addEventListener('click', onConnectClick);
+        document.getElementById('btnRequest').addEventListener('click', onRequestFrameClick);
+
+        async function onConnectClick() {
+            try {
+                document.getElementById('status').innerText = 'Status: Connecting...';
+                
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'Urinfo_' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                const server = await bluetoothDevice.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                
+                actionCharacteristic = await service.getCharacteristic(ACTION_UUID);
+                rgbCharacteristic = await service.getCharacteristic(RGB_UUID);
+                
+                await rgbCharacteristic.startNotifications();
+                rgbCharacteristic.addEventListener('characteristicvaluechanged', handleRGBChunk);
+
+                document.getElementById('status').innerText = 'Status: Connected! Ready to request frame.';
+                document.getElementById('btnRequest').disabled = false;
+            } catch (error) {
+                console.error(error);
+                document.getElementById('status').innerText = 'Status: Connection Failed';
+            }
+        }
+
+        async function onRequestFrameClick() {
+            if (!actionCharacteristic) return;
+            document.getElementById('status').innerText = 'Status: Fetching Frame...';
+            const encoder = new TextEncoder();
+            await actionCharacteristic.writeValue(encoder.encode("Com;RGB"));
+        }
+
+        function handleRGBChunk(event) {
+            const value = event.target.value;
+            const offset = value.getUint16(0, true); // Extract 2-byte offset (little endian)
+            const chunkLength = value.byteLength - 2;
+            
+            // Slot the received payload into the correct byte position
+            for (let i = 0; i < chunkLength; i++) {
+                imgBuffer[offset + i] = value.getUint8(2 + i);
+            }
+            
+            // If we've received the final chunk, render the image
+            if (offset + chunkLength >= 8192) {
+                drawFrame();
+                document.getElementById('status').innerText = 'Status: Frame Received!';
+            }
+        }
+
+        function drawFrame() {
+            const canvas = document.getElementById('rgbCanvas');
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.createImageData(64, 64);
+            
+            for (let i = 0; i < 4096; i++) {
+                // Reconstruct the 16-bit RGB565 pixel from little endian bytes
+                const pixel = imgBuffer[i * 2] | (imgBuffer[i * 2 + 1] << 8);
+                
+                // Shift to standard RGB ranges and populate ImageData array
+                imgData.data[i * 4]     = ((pixel >> 11) & 0x1F) * 255 / 31; // R
+                imgData.data[i * 4 + 1] = ((pixel >> 5)  & 0x3F) * 255 / 63; // G
+                imgData.data[i * 4 + 2] = (pixel         & 0x1F) * 255 / 31; // B
+                imgData.data[i * 4 + 3] = 255;                               // Alpha
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+        
+        function onDisconnected() {
+            document.getElementById('status').innerText = 'Status: Disconnected';
+            document.getElementById('btnRequest').disabled = true;
+        }
+    </script>
+</body>
+</html>
