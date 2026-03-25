@@ -39,8 +39,6 @@
         button#btnStop { background: var(--btn-stop); }
         button#btnOTA { background: var(--btn-ota); }
         button#btnClear { background: #30363d; flex: 0.2; margin-top: 10px; }
-        button#btnRequestFrame { background: #1f6feb; }
-        button#btnRequestFrame:hover { background: #388bfd; }
         button:disabled { background: #444 !important; cursor: not-allowed; color: #8b949e; }
 
         .chart-container { width: 100%; max-width: 900px; background: var(--chart-bg); border: 1px solid #30363d; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-sizing: border-box; }
@@ -104,10 +102,7 @@
 
     <!-- NEW CAMERA PANEL -->
     <div class="control-panel">
-        <div class="label" style="margin-bottom: 10px;">Camera Monitor</div>
-        <div class="btn-row" style="margin-bottom: 20px;">
-            <button id="btnRequestFrame" onclick="requestFrames()" disabled>Request Frame</button>
-        </div>
+        <div class="label" style="margin-bottom: 10px;">Camera Monitor (Auto-updating every 1 second)</div>
         
         <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
             <div style="text-align: center;">
@@ -201,10 +196,6 @@
     }
     
     // ----- Camera Frame Handling -----
-    function requestFrames() {
-        sendCommand('Com;Frames');
-    }
-
     function handleRGBChunk(event) {
         const value = event.target.value;
         const offset = value.getUint16(0, true);
@@ -371,7 +362,6 @@
             } catch(e) { log("! IR stream unavailable"); }
 
             btn.innerText = 'Connected ✓';
-            document.getElementById('btnRequestFrame').disabled = false;
 
             device.addEventListener('gattserverdisconnected', () => {
                 log('Device Lost');
@@ -379,7 +369,6 @@
                 document.getElementById('fwVer').innerText = '--';
                 btn.disabled = false;
                 btn.innerText = 'Connect Device';
-                document.getElementById('btnRequestFrame').disabled = true;
             });
 
         } catch (err) {
