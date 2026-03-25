@@ -106,7 +106,7 @@
         
         <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
             <div style="text-align: center;">
-                <div class="label">RGB Camera (64x64)</div>
+                <div class="label">RGB Camera (16x16 downsampled)</div>
                 <canvas id="rgbCanvas" class="camera-view" width="64" height="64" style="width: 256px; height: 256px;"></canvas>
             </div>
             <div style="text-align: center;">
@@ -142,7 +142,7 @@
     let actionChar = null;
     
     // Global buffers for image data
-    let rgbBuffer = new Uint8Array(8192); // 64x64 * 2
+    let rgbBuffer = new Uint8Array(512); // 16x16 * 2 (downsampled from 64x64)
     let irBuffer = new Uint8Array(384);   // 16x12 * 2
 
     function toggleIR(cb) {
@@ -203,7 +203,7 @@
         for (let i = 0; i < chunkLength; i++) {
             rgbBuffer[offset + i] = value.getUint8(2 + i);
         }
-        if (offset + chunkLength >= 8192) drawRGBFrame();
+        if (offset + chunkLength >= 512) drawRGBFrame();  // 16x16 = 512 bytes
     }
     
     function handleIRChunk(event) {
@@ -219,13 +219,13 @@
     function drawRGBFrame() {
         const canvas = document.getElementById('rgbCanvas');
         const ctx = canvas.getContext('2d');
-        const imgData = ctx.createImageData(64, 64);
-        for (let i = 0; i < 4096; i++) {
+        const imgData = ctx.createImageData(16, 16);  // 16x16 downsampled
+        for (let i = 0; i < 256; i++) {  // 16*16 = 256 pixels
             const pixel = rgbBuffer[i * 2] | (rgbBuffer[i * 2 + 1] << 8);
-            imgData.data[i * 4]     = ((pixel >> 11) & 0x1F) * 255 / 31; 
-            imgData.data[i * 4 + 1] = ((pixel >> 5)  & 0x3F) * 255 / 63; 
-            imgData.data[i * 4 + 2] = (pixel         & 0x1F) * 255 / 31; 
-            imgData.data[i * 4 + 3] = 255;                               
+            imgData.data[i * 4]     = ((pixel >> 11) & 0x1F) * 255 / 31;  // R
+            imgData.data[i * 4 + 1] = ((pixel >> 5)  & 0x3F) * 255 / 63;  // G
+            imgData.data[i * 4 + 2] = (pixel         & 0x1F) * 255 / 31;  // B
+            imgData.data[i * 4 + 3] = 255;                                // A
         }
         ctx.putImageData(imgData, 0, 0);
     }
