@@ -340,6 +340,11 @@
             actionChar = await service.getCharacteristic(UUID_ACTION);
             log("✓ Command Link Ready");
 
+            // Automatically send system time to ESP32 on connection
+            const unixTimestamp = Math.floor(Date.now() / 1000);
+            await sendCommand(`Com;SetTime;${unixTimestamp}`);
+            log(`✓ Time synced: ${new Date().toLocaleString()}`);
+
             for (const [id, uuid] of Object.entries(SINGLE_CHARS)) {
                 await subscribeChar(service, id, uuid, (buf) => handleSingle(id, buf));
                 await new Promise(r => setTimeout(r, 150)); 
