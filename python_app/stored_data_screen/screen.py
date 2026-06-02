@@ -1,13 +1,10 @@
 import os
 import cv2
-import wave
 import numpy as np
-import scipy.signal
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
                              QFileDialog, QSlider, QProgressBar, QMessageBox)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QBuffer, QIODevice
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtMultimedia import QAudioFormat, QAudioOutput, QAudio
 
 
 DARK_STYLE = """
@@ -142,8 +139,6 @@ class StoredDataScreen(QWidget):
         self.ir_frames = []
         self.audio_data = None
         self.current_frame = 0
-        self.audio_output = None
-        self.audio_buffer = None
         self.timer = QTimer()
         self.timer.timeout.connect(self.next_frame)
         self.init_ui()
@@ -221,13 +216,13 @@ class StoredDataScreen(QWidget):
         self.btn_play.setEnabled(False)
         self.btn_play.clicked.connect(self.toggle_playback)
         
-        self.btn_audio = QPushButton("Play Audio")
-        self.btn_audio.setEnabled(False)
-        self.btn_audio.clicked.connect(self.toggle_audio)
+        self.btn_plot = QPushButton("Plot Audio")
+        self.btn_plot.setEnabled(False)
+        self.btn_plot.clicked.connect(self.plot_audio)
         
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_play)
-        btn_layout.addWidget(self.btn_audio)
+        btn_layout.addWidget(self.btn_plot)
         btn_layout.addStretch()
         
         controls_layout.addLayout(btn_layout)
@@ -248,7 +243,7 @@ class StoredDataScreen(QWidget):
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)
         self.btn_play.setEnabled(False)
-        self.btn_audio.setEnabled(False)
+        self.btn_plot.setEnabled(False)
         self.slider.setEnabled(False)
         
         self.loader = DataLoaderThread(folder)
@@ -269,7 +264,7 @@ class StoredDataScreen(QWidget):
             self.slider.setValue(0)
             self.slider.setEnabled(True)
             self.btn_play.setEnabled(True)
-            self.btn_audio.setEnabled(True)
+            self.btn_plot.setEnabled(True)
             self.update_frames(0)
 
     def on_load_error(self, err):
@@ -311,58 +306,48 @@ class StoredDataScreen(QWidget):
             self.timer.stop()
             self.btn_play.setText("Play Video")
 
-    def toggle_audio(self):
-        if self.audio_output is not None and self.audio_output.state() == QAudio.ActiveState:
-            self.audio_output.stop()
-            self.btn_audio.setText("Play Audio")
-            return
-            
+    def plot_audio(self):
         if self.audio_data is None or len(self.audio_data) == 0:
             return
             
-        start_idx = self.current_frame * 2000
-        chunk = self.audio_data[start_idx:]
-        if len(chunk) == 0:
-            return
+        try:
+            import matplotlib.pyplot as plt
+            start_idx = self.current_frame * 2000
+            end_idx = start_idx + 2000
+            chunk = self.audio_data[start_idx:end_idx]
             
-        # Remove DC offset dynamically (since data is in millivolts)
-        audio_centered = chunk.astype(np.float32) - np.mean(chunk)
-        
-        # Fourier-based upsampling from 2kHz to 16kHz (8x) to smoothly reconstruct the analog wave
-        audio_upsampled = scipy.signal.resample(audio_centered, len(audio_centered) * 8)
-        
-        # Apply a low-pass filter at 1000Hz (Nyquist limit for 2kHz sampling) to remove static
-        b, a = scipy.signal.butter(4, 1000 / (16000 / 2), btype='low')
-        audio_filtered = scipy.signal.filtfilt(b, a, audio_upsampled)
-        
-        # Normalize to 16-bit PCM range (-32767 to 32767) for maximum audible volume
-        max_amp = np.max(np.abs(audio_filtered))
-        if max_amp > 0:
-            audio_pcm = (audio_filtered / max_amp * 32000).astype(np.int16)
-        else:
-            audio_pcm = audio_filtered.astype(np.int16)
-        
-        format = QAudioFormat()
-        format.setSampleRate(16000)
-        format.setChannelCount(1)
-        format.setSampleSize(16)
-        format.setCodec("audio/pcm")
-        format.setByteOrder(QAudioFormat.LittleEndian)
-        format.setSampleType(QAudioFormat.SignedInt)
-        
-        if self.audio_output is not None:
-            self.audio_output.stop()
+            # Remove DC offset for clearer FFT
+            chunk_centered = chunk.astype(np.float32) - np.mean(chunk)
             
-        self.audio_output = QAudioOutput(format, self)
-        self.audio_output.stateChanged.connect(self.on_audio_state_changed)
-        
-        self.audio_buffer = QBuffer()
-        self.audio_buffer.setData(audio_pcm.tobytes())
-        self.audio_buffer.open(QIODevice.ReadOnly)
-        
-        self.audio_output.start(self.audio_buffer)
-        self.btn_audio.setText("Stop Audio")
-
-    def on_audio_state_changed(self, state):
-        if state == QAudio.IdleState:
-            self.btn_audio.setText("Play Audio")
+            # Compute FFT
+            n = len(chunk_centered)
+            freqs = np.fft.rfftfreq(n, d=1/2000.0) # 2kHz Sample Rate
+            fft_mag = np.abs(np.fft.rfft(chunk_centered))
+            
+            # Find the peak frequency (ignoring the DC bin at index 0 just in case)
+            peak_idx = np.argmax(fft_mag[1:]) + 1
+            peak_freq = freqs[peak_idx]
+            
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+            
+            # Top subplot: Time domain
+            ax1.plot(chunk, color='#58a6ff')
+            ax1.set_title(f"Microphone Waveform (Frame {self.current_frame})")
+            ax1.set_xlabel("Sample Index @ 2kHz (1 second)")
+            ax1.set_ylabel("Millivolts (mV)")
+            ax1.grid(True, alpha=0.3)
+            
+            # Bottom subplot: Frequency domain (FFT)
+            ax2.plot(freqs, fft_mag, color='#39d353')
+            ax2.set_title(f"Frequency Spectrum (FFT) - Dominant Frequency: {peak_freq:.1f} Hz")
+            ax2.set_xlabel("Frequency (Hz)")
+            ax2.set_ylabel("Magnitude")
+            ax2.set_yscale('log')  # Use logarithmic scale to reveal hidden quiet frequencies!
+            ax2.axvline(x=peak_freq, color='r', linestyle='--', alpha=0.5, label=f"Peak: {peak_freq:.1f} Hz")
+            ax2.legend()
+            ax2.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.show()
+        except ImportError:
+            QMessageBox.warning(self, "Missing Library", "Please install matplotlib to plot data:\npip install matplotlib")
