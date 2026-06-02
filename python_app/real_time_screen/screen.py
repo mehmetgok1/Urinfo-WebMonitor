@@ -290,9 +290,9 @@ class CameraWidget(QLabel):
         h, w = self.buffer.shape[:2]
         bytes_per_line = 3 * w
         img = QImage(self.buffer.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+        pixmap = QPixmap.fromImage(img).scaled(128, 128, Qt.IgnoreAspectRatio, Qt.FastTransformation)
         self.setPixmap(pixmap)
-        self.setFixedSize(256, 256)
+        self.setFixedSize(128, 128)
 
 
 class SimpleChartWidget(QWidget):
@@ -303,7 +303,7 @@ class SimpleChartWidget(QWidget):
         self.color = QColor(color_hex)
         self.max_len = max_len
         self.data = []
-        self.setMinimumHeight(200)
+        self.setMinimumHeight(150)
         self.setStyleSheet("background-color: #1c2128; border: 1px solid #30363d; border-radius: 10px;")
     
     def add_value(self, value):
@@ -336,9 +336,9 @@ class SimpleChartWidget(QWidget):
             max_v = min_v + 1
             min_v = min_v - 1
             
-        pad_x = 15
+        pad_x = 40
         pad_y_top = 40
-        pad_y_bottom = 15
+        pad_y_bottom = 20
         
         path = QPainterPath()
         
@@ -353,12 +353,30 @@ class SimpleChartWidget(QWidget):
         pen = QPen(self.color, 2)
         painter.setPen(pen)
         painter.drawPath(path)
+        
+        # Draw axes and labels
+        painter.setPen(QColor("#8b949e"))
+        font.setPixelSize(10)
+        painter.setFont(font)
+        
+        # Axes lines
+        painter.drawLine(pad_x - 5, pad_y_top, pad_x - 5, h - pad_y_bottom)
+        painter.drawLine(pad_x - 5, h - pad_y_bottom, w - 5, h - pad_y_bottom)
+        
+        # Y labels
+        painter.drawText(2, pad_y_top + 4, f"{max_v:.1f}")
+        painter.drawText(2, h - pad_y_bottom, f"{min_v:.1f}")
+        
+        # X labels
+        painter.drawText(pad_x, h - 5, f"-{self.max_len}")
+        painter.drawText(w - 35, h - 5, "Now")
 
 
 class RealTimeScreen(QWidget):
     def __init__(self):
         super().__init__()
         self.ble_thread = None
+        self.is_connected = False
         self.sensor_values = {
             'Battery': '--', 'Lux': '--', 'Ambient-I': '--', 'PIR': '--',
             'M-Dist': '--', 'M-Enrg': '--', 'S-Dist': '--', 'S-Enrg': '--', 'Detect': '--'
@@ -406,7 +424,7 @@ class RealTimeScreen(QWidget):
         self.sensor_labels = {}
         sensors = list(self.sensor_values.keys())
         for i, sensor in enumerate(sensors):
-            row, col = i // 3, i % 3
+            row, col = i // 5, i % 5
             card = self.create_card(sensor)
             grid.addWidget(card, row, col)
             self.sensor_labels[sensor] = card.findChild(QLabel, "value")
@@ -426,8 +444,11 @@ class RealTimeScreen(QWidget):
         
         self.lux_chart = SimpleChartWidget("Lux", "#ffcc00")
         self.pir_chart = SimpleChartWidget("PIR", "#58a6ff")
-        main_layout.addWidget(self.lux_chart)
-        main_layout.addWidget(self.pir_chart)
+        
+        charts_layout = QHBoxLayout()
+        charts_layout.addWidget(self.lux_chart)
+        charts_layout.addWidget(self.pir_chart)
+        main_layout.addLayout(charts_layout)
         
         # Log Area
         log_label = QLabel("System Log:")
@@ -641,16 +662,17 @@ class RealTimeScreen(QWidget):
             self.ir_canvas.add_chunk(offset, data[2:])
             
     def on_ble_connection_changed(self, is_connected):
+        self.is_connected = is_connected
         if is_connected:
-            self.btn_connect.setText("Connected ✓")
-            self.btn_connect.setEnabled(False)
+            self.btn_connect.setText("Disconnect")
+            self.btn_connect.setStyleSheet("background-color: #da3633;")
             cmd = f"Com;SetTime;{int(time.time())}"
             if self.ble_thread:
                 self.ble_thread.send_command(cmd)
             self.log_text.append("> Time synced")
         else:
             self.btn_connect.setText("Connect Device")
-            self.btn_connect.setEnabled(True)
+            self.btn_connect.setStyleSheet("")
     
     def connect_to_device(self, device):
         if self.ble_thread and self.ble_thread.isRunning():
@@ -667,6 +689,11 @@ class RealTimeScreen(QWidget):
         self.ble_thread.start()
         
     def on_connect(self):
+        if self.is_connected:
+            if self.ble_thread and self.ble_thread.isRunning():
+                self.ble_thread.stop()
+            return
+            
         self.log_text.append("> Opening Bluetooth selector...")
         dialog = DeviceDialog(self)
         if dialog.exec_():
