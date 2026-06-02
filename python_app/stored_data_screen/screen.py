@@ -1,19 +1,368 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-from PyQt5.QtCore import Qt
+import os
+import cv2
+import wave
+import numpy as np
+import scipy.signal
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+                             QFileDialog, QSlider, QProgressBar, QMessageBox)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QBuffer, QIODevice
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtMultimedia import QAudioFormat, QAudioOutput, QAudio
+
+
+DARK_STYLE = """
+    QWidget {
+        background-color: #0d1117;
+        color: #c9d1d9;
+    }
+    QPushButton {
+        background-color: #238636;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-weight: bold;
+    }
+    QPushButton:hover {
+        background-color: #2ea043;
+    }
+    QPushButton:disabled {
+        background-color: #1c2128;
+        color: #8b949e;
+    }
+    QSlider::groove:horizontal {
+        background: #30363d;
+        height: 8px;
+        border-radius: 4px;
+    }
+    QSlider::handle:horizontal {
+        background: #58a6ff;
+        width: 18px;
+        margin: -5px 0;
+        border-radius: 9px;
+    }
+    QProgressBar {
+        border: 1px solid #30363d;
+        border-radius: 5px;
+        text-align: center;
+    }
+    QProgressBar::chunk {
+        background-color: #39d353;
+        width: 10px;
+    }
+"""
+
+# Matches uri_bin_extracter.py struct
+combined_packet_dtype = np.dtype([
+    ('batteryLevel', 'f4'), ('batteryPercentage', 'f4'),
+    ('ambLight', 'f4'), ('ambLight_Int', 'u2'),
+    ('PIRValue', 'f4'), ('movingDist', 'u2'),
+    ('movingEnergy', 'u1'), ('staticDist', 'u2'),
+    ('staticEnergy', 'u1'), ('detectionDist', 'u2'),
+    ('sequence', 'u2'), ('ambientLight_slave', 'u2'),
+    ('temperature', 'f4'), ('humidity', 'f4'),
+    ('accelX', 'i2'), ('accelY', 'i2'), ('accelZ', 'i2'),
+    ('gyroX', 'i2'), ('gyroY', 'i2'), ('gyroZ', 'i2'),
+    ('timestamp_ms', 'u4'), ('status', 'u1'),
+    ('accelSampleCount', 'u2'),
+    ('accelX_samples', 'i2', (2000,)), 
+    ('accelY_samples', 'i2', (2000,)),
+    ('accelZ_samples', 'i2', (2000,)),
+    ('microphoneSamples', 'u2', (2000,)),
+    ('rgbFrame', 'u2', (4096,)), 
+    ('irFrame', 'u2', (192,))
+])
+
+
+class DataLoaderThread(QThread):
+    progress = pyqtSignal(int)
+    finished_data = pyqtSignal(list, list, np.ndarray)
+    error = pyqtSignal(str)
+
+    def __init__(self, folder_path):
+        super().__init__()
+        self.folder_path = folder_path
+
+    def run(self):
+        try:
+            bin_files = sorted([f for f in os.listdir(self.folder_path) if f.endswith(".bin")])
+            if not bin_files:
+                self.error.emit("No .bin files found in selected folder.")
+                return
+
+            rgb_frames = []
+            ir_frames = []
+            audio_chunks = []
+            
+            total_files = len(bin_files)
+            for i, bin_file in enumerate(bin_files):
+                full_path = os.path.join(self.folder_path, bin_file)
+                data = np.fromfile(full_path, dtype=combined_packet_dtype)
+                
+                for packet in data:
+                    # Process RGB Frame
+                    rgb_raw = packet['rgbFrame'].view(np.uint8).reshape((64, 64, 2))
+                    img_bgr = cv2.cvtColor(rgb_raw, cv2.COLOR_BGR5652BGR)
+                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                    h, w, c = img_rgb.shape
+                    qimg_rgb = QImage(img_rgb.data, w, h, 3 * w, QImage.Format_RGB888).copy()
+                    rgb_frames.append(qimg_rgb)
+                    
+                    # Process IR Thermal Heatmap
+                    ir_raw = packet['irFrame'].reshape((12, 16))
+                    ir_celsius = (ir_raw / 100.0) - 40
+                    min_val, max_val = ir_celsius.min(), ir_celsius.max()
+                    if max_val == min_val: max_val = min_val + 1
+                    norm = (ir_celsius - min_val) / (max_val - min_val)
+                    mapped = (norm * 255).astype(np.uint8)
+                    heatmap = cv2.applyColorMap(mapped, cv2.COLORMAP_HOT)
+                    heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+                    qimg_ir = QImage(heatmap_rgb.data, 16, 12, 3 * 16, QImage.Format_RGB888).copy()
+                    ir_frames.append(qimg_ir)
+                    
+                    # Collect Audio
+                    audio_chunks.append(packet['microphoneSamples'])
+                
+                self.progress.emit(int(((i + 1) / total_files) * 100))
+
+            if audio_chunks:
+                audio_data = np.concatenate(audio_chunks)
+            else:
+                audio_data = np.array([], dtype=np.uint16)
+
+            self.finished_data.emit(rgb_frames, ir_frames, audio_data)
+        except Exception as e:
+            self.error.emit(str(e))
 
 
 class StoredDataScreen(QWidget):
     def __init__(self):
         super().__init__()
+        self.rgb_frames = []
+        self.ir_frames = []
+        self.audio_data = None
+        self.current_frame = 0
+        self.audio_output = None
+        self.audio_buffer = None
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.next_frame)
         self.init_ui()
     
     def init_ui(self):
         """Initialize the UI for stored data monitoring"""
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
         
-        # Placeholder content
-        label = QLabel("Stored Data Monitor")
-        label.setAlignment(Qt.AlignCenter)
+        # Top Panel: Folder Selection
+        top_layout = QHBoxLayout()
+        self.btn_select_folder = QPushButton("Select Data Folder")
+        self.btn_select_folder.clicked.connect(self.select_folder)
+        self.lbl_folder = QLabel("No folder selected")
+        self.lbl_folder.setStyleSheet("color: #8b949e; font-style: italic;")
         
-        layout.addWidget(label)
+        top_layout.addWidget(self.btn_select_folder)
+        top_layout.addWidget(self.lbl_folder, stretch=1)
+        layout.addLayout(top_layout)
+        
+        # Progress Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+        
+        # Middle Panel: Video Squares
+        video_layout = QHBoxLayout()
+        
+        # RGB Square
+        rgb_vbox = QVBoxLayout()
+        rgb_lbl = QLabel("RGB Camera Video")
+        rgb_lbl.setAlignment(Qt.AlignCenter)
+        self.rgb_view = QLabel()
+        self.rgb_view.setFixedSize(256, 256)
+        self.rgb_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
+        self.rgb_view.setAlignment(Qt.AlignCenter)
+        rgb_vbox.addWidget(rgb_lbl)
+        rgb_vbox.addWidget(self.rgb_view)
+        
+        # IR Square
+        ir_vbox = QVBoxLayout()
+        ir_lbl = QLabel("Thermal IR Video")
+        ir_lbl.setAlignment(Qt.AlignCenter)
+        self.ir_view = QLabel()
+        self.ir_view.setFixedSize(256, 256)
+        self.ir_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
+        self.ir_view.setAlignment(Qt.AlignCenter)
+        ir_vbox.addWidget(ir_lbl)
+        ir_vbox.addWidget(self.ir_view)
+        
+        video_layout.addStretch()
+        video_layout.addLayout(rgb_vbox)
+        video_layout.addSpacing(40)
+        video_layout.addLayout(ir_vbox)
+        video_layout.addStretch()
+        layout.addLayout(video_layout)
+        
+        # Bottom Panel: Controls
+        controls_layout = QVBoxLayout()
+        
+        # Frame info and Slider
+        self.lbl_frame_info = QLabel("Frame: 0 / 0")
+        self.lbl_frame_info.setAlignment(Qt.AlignCenter)
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setEnabled(False)
+        self.slider.valueChanged.connect(self.on_slider_moved)
+        
+        controls_layout.addWidget(self.lbl_frame_info)
+        controls_layout.addWidget(self.slider)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        self.btn_play = QPushButton("Play Video")
+        self.btn_play.setEnabled(False)
+        self.btn_play.clicked.connect(self.toggle_playback)
+        
+        self.btn_audio = QPushButton("Play Audio")
+        self.btn_audio.setEnabled(False)
+        self.btn_audio.clicked.connect(self.toggle_audio)
+        
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_play)
+        btn_layout.addWidget(self.btn_audio)
+        btn_layout.addStretch()
+        
+        controls_layout.addLayout(btn_layout)
+        layout.addLayout(controls_layout)
+        
+        layout.addStretch()
         self.setLayout(layout)
+        self.setStyleSheet(DARK_STYLE)
+
+    def select_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Session Folder")
+        if folder:
+            self.lbl_folder.setText(folder)
+            self.load_data(folder)
+
+    def load_data(self, folder):
+        self.btn_select_folder.setEnabled(False)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(True)
+        self.btn_play.setEnabled(False)
+        self.btn_audio.setEnabled(False)
+        self.slider.setEnabled(False)
+        
+        self.loader = DataLoaderThread(folder)
+        self.loader.progress.connect(self.progress_bar.setValue)
+        self.loader.finished_data.connect(self.on_data_loaded)
+        self.loader.error.connect(self.on_load_error)
+        self.loader.start()
+
+    def on_data_loaded(self, rgb, ir, audio):
+        self.progress_bar.setVisible(False)
+        self.btn_select_folder.setEnabled(True)
+        self.rgb_frames = rgb
+        self.ir_frames = ir
+        self.audio_data = audio
+        
+        if self.rgb_frames:
+            self.slider.setRange(0, len(self.rgb_frames) - 1)
+            self.slider.setValue(0)
+            self.slider.setEnabled(True)
+            self.btn_play.setEnabled(True)
+            self.btn_audio.setEnabled(True)
+            self.update_frames(0)
+
+    def on_load_error(self, err):
+        self.progress_bar.setVisible(False)
+        self.btn_select_folder.setEnabled(True)
+        QMessageBox.critical(self, "Error", f"Failed to load data:\n{err}")
+
+    def on_slider_moved(self, val):
+        if not self.timer.isActive():
+            self.update_frames(val)
+
+    def update_frames(self, index):
+        self.current_frame = index
+        self.lbl_frame_info.setText(f"Frame: {index + 1} / {len(self.rgb_frames)}")
+        
+        if 0 <= index < len(self.rgb_frames):
+            rgb_pix = QPixmap.fromImage(self.rgb_frames[index]).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            self.rgb_view.setPixmap(rgb_pix)
+            
+            ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            self.ir_view.setPixmap(ir_pix)
+
+    def toggle_playback(self):
+        if self.timer.isActive():
+            self.timer.stop()
+            self.btn_play.setText("Play Video")
+        else:
+            if self.current_frame >= len(self.rgb_frames) - 1:
+                self.current_frame = 0
+            self.timer.start(100)  # 10 FPS for faster playback viewing
+            self.btn_play.setText("Pause Video")
+
+    def next_frame(self):
+        if self.current_frame < len(self.rgb_frames) - 1:
+            self.current_frame += 1
+            self.slider.setValue(self.current_frame)
+            self.update_frames(self.current_frame)
+        else:
+            self.timer.stop()
+            self.btn_play.setText("Play Video")
+
+    def toggle_audio(self):
+        if self.audio_output is not None and self.audio_output.state() == QAudio.ActiveState:
+            self.audio_output.stop()
+            self.btn_audio.setText("Play Audio")
+            return
+            
+        if self.audio_data is None or len(self.audio_data) == 0:
+            return
+            
+        start_idx = self.current_frame * 2000
+        chunk = self.audio_data[start_idx:]
+        if len(chunk) == 0:
+            return
+            
+        # Remove DC offset dynamically (since data is in millivolts)
+        audio_centered = chunk.astype(np.float32) - np.mean(chunk)
+        
+        # Fourier-based upsampling from 2kHz to 16kHz (8x) to smoothly reconstruct the analog wave
+        audio_upsampled = scipy.signal.resample(audio_centered, len(audio_centered) * 8)
+        
+        # Apply a low-pass filter at 1000Hz (Nyquist limit for 2kHz sampling) to remove static
+        b, a = scipy.signal.butter(4, 1000 / (16000 / 2), btype='low')
+        audio_filtered = scipy.signal.filtfilt(b, a, audio_upsampled)
+        
+        # Normalize to 16-bit PCM range (-32767 to 32767) for maximum audible volume
+        max_amp = np.max(np.abs(audio_filtered))
+        if max_amp > 0:
+            audio_pcm = (audio_filtered / max_amp * 32000).astype(np.int16)
+        else:
+            audio_pcm = audio_filtered.astype(np.int16)
+        
+        format = QAudioFormat()
+        format.setSampleRate(16000)
+        format.setChannelCount(1)
+        format.setSampleSize(16)
+        format.setCodec("audio/pcm")
+        format.setByteOrder(QAudioFormat.LittleEndian)
+        format.setSampleType(QAudioFormat.SignedInt)
+        
+        if self.audio_output is not None:
+            self.audio_output.stop()
+            
+        self.audio_output = QAudioOutput(format, self)
+        self.audio_output.stateChanged.connect(self.on_audio_state_changed)
+        
+        self.audio_buffer = QBuffer()
+        self.audio_buffer.setData(audio_pcm.tobytes())
+        self.audio_buffer.open(QIODevice.ReadOnly)
+        
+        self.audio_output.start(self.audio_buffer)
+        self.btn_audio.setText("Stop Audio")
+
+    def on_audio_state_changed(self, state):
+        if state == QAudio.IdleState:
+            self.btn_audio.setText("Play Audio")
