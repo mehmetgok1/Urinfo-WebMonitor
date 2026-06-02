@@ -9,7 +9,8 @@ class MonitorApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Data Monitor Dashboard")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setGeometry(100, 100, 1200, 900)
+        self.setMinimumSize(800, 600)
         
         # Create tab widget
         self.tabs = QTabWidget()
