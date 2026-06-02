@@ -550,8 +550,9 @@ class RealTimeScreen(QWidget):
         led_label.setStyleSheet("font-size: 10px; color: #8b949e;")
         self.led_slider = QSlider(Qt.Horizontal)
         self.led_slider.setRange(0, 100)
-        self.led_slider.sliderMoved.connect(self.on_led_change)
         self.led_value = QLabel("0")
+        self.led_slider.valueChanged.connect(lambda v: self.led_value.setText(str(v)))
+        self.led_slider.sliderReleased.connect(self.on_led_release)
         self.led_value.setStyleSheet("font-family: monospace; min-width: 30px;")
         led_group = QHBoxLayout()
         led_group.addWidget(led_label)
@@ -702,8 +703,8 @@ class RealTimeScreen(QWidget):
                 self.log_text.append(f"> Connecting to {device.name} ({device.address})...")
                 self.connect_to_device(device)
     
-    def on_led_change(self, value):
-        self.led_value.setText(str(value))
+    def on_led_release(self):
+        value = self.led_slider.value()
         cmd = f"Com;Control;LED;{value}"
         if self.ble_thread and self.ble_thread.isRunning():
             self.ble_thread.send_command(cmd)
