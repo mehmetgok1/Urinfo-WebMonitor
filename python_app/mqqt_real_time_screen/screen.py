@@ -226,7 +226,10 @@ class DataProcessingThread(QThread):
                 data = self.data_queue.get(timeout=0.1)
                 packet_data = np.frombuffer(data, dtype=combined_packet_dtype)[0]
                 
-                self.log_msg.emit(f"Received TCP packet (Seq: {packet_data['sequence']})")
+                self.log_msg.emit(f"Seq: {packet_data['sequence']:04d} | "
+                                  f"Temp: {packet_data['temperature']:.1f}°C | "
+                                  f"Hum: {packet_data['humidity']:.1f}% | "
+                                  f"Bat: {packet_data['batteryPercentage']:.0f}%")
                 
                 self.sensor_updated.emit("Battery", f"{packet_data['batteryPercentage']:.1f}")
                 self.sensor_updated.emit("Lux", f"{packet_data['ambLight']:.1f}")
@@ -247,7 +250,7 @@ class DataProcessingThread(QThread):
         self._is_running = False
 
 
-class TcpReceiverThread(QThread):
+class UdpReceiverThread(QThread):
     connected = pyqtSignal(bool)
     log_msg = pyqtSignal(str)
 
@@ -259,68 +262,65 @@ class TcpReceiverThread(QThread):
         self.server_socket = None
 
     def run(self):
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        
-        # Optimize Python socket for high-throughput streaming
-        self.server_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 1024)
         
         try:
             self.server_socket.bind(('0.0.0.0', self.port))
-            self.server_socket.listen(1)
-            self.server_socket.settimeout(1.0)
-            self.log_msg.emit(f"TCP Server listening on port {self.port}...")
+            # 500ms timeout. Since frames arrive at 1Hz, any silence longer than 500ms means the frame is over.
+            self.server_socket.settimeout(0.5)
+            self.log_msg.emit(f"UDP Server listening on port {self.port}...")
             self.connected.emit(True)
         except Exception as e:
-            self.log_msg.emit(f"TCP bind error: {e}")
+            self.log_msg.emit(f"UDP bind error: {e}")
             self.connected.emit(False)
             return
 
+        expected_size = combined_packet_dtype.itemsize
+        buffer = b''
+        first_chunk = False
+
         while self._is_running:
             try:
-                conn, addr = self.server_socket.accept()
-                self.log_msg.emit(f"ESP32 Connected from {addr}")
-                conn.settimeout(1.0)
-                self._handle_connection(conn)
+                data, addr = self.server_socket.recvfrom(65535)
+                if not data:
+                    continue
+                
+                if not first_chunk:
+                    self.log_msg.emit(f"✓ Connection established! Receiving UDP chunks from {addr[0]}...")
+                    first_chunk = True
+
+                if len(data) == expected_size:
+                    try:
+                        self.data_queue.put_nowait(data)
+                    except queue.Full:
+                        self.log_msg.emit("Warning: Processing queue full, dropped UDP packet")
+                else:
+                    buffer += data
+                    if len(buffer) == expected_size:
+                        try:
+                            self.data_queue.put_nowait(buffer)
+                        except queue.Full:
+                            self.log_msg.emit("Warning: Processing queue full, dropped UDP packet")
+                        buffer = b''
+                    elif len(buffer) > expected_size:
+                        self.log_msg.emit(f"Warning: UDP chunk sync lost ({len(buffer)} bytes). Resyncing...")
+                        buffer = data  # Save the current chunk as the start of the next frame sequence
             except socket.timeout:
-                pass
+                # If silence exceeds 500ms and we have a partial buffer, a chunk was dropped mid-frame.
+                if len(buffer) > 0:
+                    self.log_msg.emit(f"Warning: Dropped incomplete frame ({len(buffer)} bytes) due to packet loss.")
+                    buffer = b''
             except Exception as e:
                 if self._is_running:
-                    self.log_msg.emit(f"Accept error: {e}")
+                    self.log_msg.emit(f"Receive error: {e}")
 
         try:
             self.server_socket.close()
         except:
             pass
         self.connected.emit(False)
-
-    def _handle_connection(self, conn):
-        expected_size = combined_packet_dtype.itemsize
-        try:
-            while self._is_running:
-                data = b''
-                while len(data) < expected_size and self._is_running:
-                    try:
-                        packet = conn.recv(expected_size - len(data))
-                        if not packet:
-                            break
-                        data += packet
-                    except socket.timeout:
-                        pass
-                
-                if len(data) == expected_size:
-                    try:
-                        self.data_queue.put_nowait(data)
-                    except queue.Full:
-                        self.log_msg.emit("Warning: Processing queue full, dropped TCP packet")
-                else:
-                    break
-        except Exception as e:
-            self.log_msg.emit(f"Stream error: {e}")
-        finally:
-            conn.close()
-            self.log_msg.emit("ESP32 Disconnected")
 
     def stop(self):
         self._is_running = False
@@ -380,11 +380,13 @@ class DeviceDialog(QDialog):
 
 class CameraWidget(QLabel):
     """Display camera feed as pixmap"""
-    def __init__(self, width, height, is_rgb=True):
+    def __init__(self, width, height, is_rgb=True, display_w=256, display_h=256):
         super().__init__()
         self.width = width
         self.height = height
         self.is_rgb = is_rgb
+        self.display_w = display_w
+        self.display_h = display_h
         self.buffer = np.zeros((height, width, 3), dtype=np.uint8)
         self.raw_bytes = bytearray(width * height * 2)
         self.setStyleSheet("border: 2px solid #30363d; border-radius: 8px; background: #000;")
@@ -440,9 +442,9 @@ class CameraWidget(QLabel):
         h, w = self.buffer.shape[:2]
         bytes_per_line = 3 * w
         img = QImage(self.buffer.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(img).scaled(128, 128, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+        pixmap = QPixmap.fromImage(img).scaled(self.display_w, self.display_h, Qt.IgnoreAspectRatio, Qt.FastTransformation)
         self.setPixmap(pixmap)
-        self.setFixedSize(128, 128)
+        self.setFixedSize(self.display_w, self.display_h)
 
 
 class SimpleChartWidget(QWidget):
@@ -522,11 +524,11 @@ class SimpleChartWidget(QWidget):
         painter.drawText(w - 35, h - 5, "Now")
 
 
-class TcpRealTimeScreen(QWidget):
+class UdpRealTimeScreen(QWidget):
     def __init__(self):
         super().__init__()
         self.ble_thread = None
-        self.tcp_thread = None
+        self.udp_thread = None
         self.processing_thread = None
         self.is_connected = False
         self.sensor_values = {
@@ -551,7 +553,7 @@ class TcpRealTimeScreen(QWidget):
         
         # Header
         header_layout = QHBoxLayout()
-        title = QLabel("Urinfo System (TCP)")
+        title = QLabel("Urinfo System (UDP)")
         title.setStyleSheet("font-size: 24px; font-weight: bold; color: #c9d1d9;")
         fw_label = QLabel("FW: <span style='color: #8b949e; font-family: monospace;'>--</span>")
         header_layout.addWidget(title)
@@ -681,20 +683,20 @@ class TcpRealTimeScreen(QWidget):
         self.btn_stop.setMinimumHeight(40)
         self.btn_wifi = QPushButton("Send WiFi")
         self.btn_wifi.setMinimumHeight(40)
-        self.btn_tcp = QPushButton("Start TCP Server")
-        self.btn_tcp.setMinimumHeight(40)
+        self.btn_udp = QPushButton("Start UDP Server")
+        self.btn_udp.setMinimumHeight(40)
         self.btn_ota = QPushButton("Start OTA")
         self.btn_ota.setObjectName("btnOTA")
         self.btn_ota.setMinimumHeight(40)
         self.btn_start.clicked.connect(self.on_start)
         self.btn_stop.clicked.connect(self.on_stop)
         self.btn_wifi.clicked.connect(self.on_wifi_send)
-        self.btn_tcp.clicked.connect(self.on_tcp_start)
+        self.btn_udp.clicked.connect(self.on_udp_start)
         self.btn_ota.clicked.connect(self.on_ota)
         btn_layout.addWidget(self.btn_start)
         btn_layout.addWidget(self.btn_stop)
         btn_layout.addWidget(self.btn_wifi)
-        btn_layout.addWidget(self.btn_tcp)
+        btn_layout.addWidget(self.btn_udp)
         btn_layout.addWidget(self.btn_ota)
         layout.addLayout(btn_layout)
         
@@ -749,7 +751,7 @@ class TcpRealTimeScreen(QWidget):
         rgb_group = QVBoxLayout()
         rgb_title = QLabel("rgb 64*64 at 1second")
         rgb_title.setStyleSheet("font-size: 10px; color: #8b949e; text-transform: uppercase;")
-        self.rgb_canvas = CameraWidget(64, 64, is_rgb=True)
+        self.rgb_canvas = CameraWidget(64, 64, is_rgb=True, display_w=512, display_h=512)
         rgb_group.addWidget(rgb_title)
         rgb_group.addWidget(self.rgb_canvas)
         rgb_group.setAlignment(self.rgb_canvas, Qt.AlignCenter)
@@ -757,7 +759,7 @@ class TcpRealTimeScreen(QWidget):
         ir_group = QVBoxLayout()
         ir_title = QLabel("ir 16*12 at 1second")
         ir_title.setStyleSheet("font-size: 10px; color: #8b949e; text-transform: uppercase;")
-        self.ir_canvas = CameraWidget(16, 12, is_rgb=False)
+        self.ir_canvas = CameraWidget(16, 12, is_rgb=False, display_w=512, display_h=384)
         ir_group.addWidget(ir_title)
         ir_group.addWidget(self.ir_canvas)
         ir_group.setAlignment(self.ir_canvas, Qt.AlignCenter)
@@ -835,17 +837,17 @@ class TcpRealTimeScreen(QWidget):
     def process_ir_full(self, data):
         self.ir_canvas.set_full_frame(data)
             
-    def on_tcp_start(self):
-        if self.tcp_thread and self.tcp_thread.isRunning():
-            self.tcp_thread.stop()
-            self.tcp_thread.wait() # cleanly exit thread before updating UI
+    def on_udp_start(self):
+        if self.udp_thread and self.udp_thread.isRunning():
+            self.udp_thread.stop()
+            self.udp_thread.wait() # cleanly exit thread before updating UI
             if self.processing_thread and self.processing_thread.isRunning():
                 self.processing_thread.stop()
                 self.processing_thread.wait()
-            self.btn_tcp.setText("Start TCP Server")
+            self.btn_udp.setText("Start UDP Server")
             return
             
-        self.log_text.append(f"> Starting TCP Server on port 8080...")
+        self.log_text.append(f"> Starting UDP Server on port 8080...")
         
         self.processing_thread = DataProcessingThread()
         self.processing_thread.log_msg.connect(lambda msg: self.log_text.append(f"> {msg}"))
@@ -855,12 +857,12 @@ class TcpRealTimeScreen(QWidget):
         self.processing_thread.ir_full_received.connect(self.process_ir_full)
         self.processing_thread.start()
         
-        self.tcp_thread = TcpReceiverThread(self.processing_thread.data_queue, port=8080)
-        self.tcp_thread.connected.connect(
-            lambda connected: self.btn_tcp.setText("Stop TCP Server") if connected else self.btn_tcp.setText("Start TCP Server")
+        self.udp_thread = UdpReceiverThread(self.processing_thread.data_queue, port=8080)
+        self.udp_thread.connected.connect(
+            lambda connected: self.btn_udp.setText("Stop UDP Server") if connected else self.btn_udp.setText("Start UDP Server")
         )
-        self.tcp_thread.log_msg.connect(lambda msg: self.log_text.append(f"> {msg}"))
-        self.tcp_thread.start()
+        self.udp_thread.log_msg.connect(lambda msg: self.log_text.append(f"> {msg}"))
+        self.udp_thread.start()
 
     def on_ble_connection_changed(self, is_connected):
         self.is_connected = is_connected
