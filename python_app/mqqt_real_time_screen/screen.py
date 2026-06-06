@@ -5,7 +5,7 @@ import re
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, 
                              QSlider, QCheckBox, QTextEdit, QScrollArea, QLineEdit, QDialog, QListWidget)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QPen, QPainterPath
+from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QPen, QPainterPath, QTransform
 from collections import deque
 import numpy as np
 from bleak import BleakScanner, BleakClient
@@ -360,11 +360,12 @@ class DeviceDialog(QDialog):
     def on_devices_found(self, devices):
         self.scan_btn.setEnabled(True)
         self.list_widget.clear()
-        self.devices = [d for d in devices if d.name]
+        self.devices = devices
         if not self.devices:
-            self.list_widget.addItem("No named devices found.")
+            self.list_widget.addItem("No devices found.")
         for d in self.devices:
-            self.list_widget.addItem(f"{d.name} ({d.address})")
+            name = d.name if d.name else "Unknown Device"
+            self.list_widget.addItem(f"{name} ({d.address})")
             
     def on_error(self, err):
         self.scan_btn.setEnabled(True)
@@ -442,7 +443,18 @@ class CameraWidget(QLabel):
         h, w = self.buffer.shape[:2]
         bytes_per_line = 3 * w
         img = QImage(self.buffer.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(img).scaled(self.display_w, self.display_h, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+        if self.is_rgb:
+            # Scale up by 1.45 (~sqrt(2)) so the rotated image fully overlaps the square bounding box
+            scale_factor = 1.45
+            scaled_w, scaled_h = int(self.display_w * scale_factor), int(self.display_h * scale_factor)
+            scaled_pixmap = QPixmap.fromImage(img).scaled(scaled_w, scaled_h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            transform = QTransform().rotate(-45)
+            rotated_pixmap = scaled_pixmap.transformed(transform, Qt.SmoothTransformation)
+            x_offset = (rotated_pixmap.width() - self.display_w) // 2
+            y_offset = (rotated_pixmap.height() - self.display_h) // 2
+            pixmap = rotated_pixmap.copy(x_offset, y_offset, self.display_w, self.display_h)
+        else:
+            pixmap = QPixmap.fromImage(img).scaled(self.display_w, self.display_h, Qt.IgnoreAspectRatio, Qt.FastTransformation)
         self.setPixmap(pixmap)
         self.setFixedSize(self.display_w, self.display_h)
 

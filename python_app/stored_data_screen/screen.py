@@ -101,6 +101,7 @@ class DataLoaderThread(QThread):
                     rgb_raw = packet['rgbFrame'].view(np.uint8).reshape((64, 64, 2))
                     img_bgr = cv2.cvtColor(rgb_raw, cv2.COLOR_BGR5652BGR)
                     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                    img_rgb = np.rot90(img_rgb, k=1)
                     h, w, c = img_rgb.shape
                     qimg_rgb = QImage(img_rgb.data, w, h, 3 * w, QImage.Format_RGB888).copy()
                     rgb_frames.append(qimg_rgb)
