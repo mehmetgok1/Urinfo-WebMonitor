@@ -9,6 +9,7 @@ from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QPen, QPainterPath
 from collections import deque
 import numpy as np
 from bleak import BleakScanner, BleakClient
+import socket
 
 
 DARK_STYLE = """
@@ -78,6 +79,27 @@ UUID_MMWAVE      = "11111111-1111-1111-2222-111111111115"
 UUID_AMB_INT     = "11111111-1111-1111-2222-111111111118"
 UUID_RGB         = "c2a969f6-16e9-4e08-99e7-5e6086f6a546"
 UUID_IR          = "d3b969f6-16e9-4e08-99e7-5e6086f6a547"
+
+# Matches C++ CombinedDataPacket struct
+combined_packet_dtype = np.dtype([
+    ('batteryLevel', 'f4'), ('batteryPercentage', 'f4'),
+    ('ambLight', 'f4'), ('ambLight_Int', 'u2'),
+    ('PIRValue', 'f4'), ('movingDist', 'u2'),
+    ('movingEnergy', 'u1'), ('staticDist', 'u2'),
+    ('staticEnergy', 'u1'), ('detectionDist', 'u2'),
+    ('sequence', 'u2'), ('ambientLight_slave', 'u2'),
+    ('temperature', 'f4'), ('humidity', 'f4'),
+    ('accelX', 'i2'), ('accelY', 'i2'), ('accelZ', 'i2'),
+    ('gyroX', 'i2'), ('gyroY', 'i2'), ('gyroZ', 'i2'),
+    ('timestamp_ms', 'u4'), ('status', 'u1'),
+    ('accelSampleCount', 'u2'),
+    ('accelX_samples', 'i2', (2000,)), 
+    ('accelY_samples', 'i2', (2000,)),
+    ('accelZ_samples', 'i2', (2000,)),
+    ('microphoneSamples', 'u2', (2000,)),
+    ('rgbFrame', 'u2', (4096,)), 
+    ('irFrame', 'u2', (192,))
+])
 
 
 class BleScannerThread(QThread):
@@ -185,6 +207,92 @@ class BleConnectionThread(QThread):
         self._is_running = False
 
 
+class TcpReceiverThread(QThread):
+    connected = pyqtSignal(bool)
+    log_msg = pyqtSignal(str)
+    sensor_updated = pyqtSignal(str, str)
+    mmwave_updated = pyqtSignal(str)
+    rgb_full_received = pyqtSignal(bytes)
+    ir_full_received = pyqtSignal(bytes)
+
+    def __init__(self, port=8080):
+        super().__init__()
+        self.port = port
+        self._is_running = True
+        self.server_socket = None
+
+    def run(self):
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            self.server_socket.bind(('0.0.0.0', self.port))
+            self.server_socket.listen(1)
+            self.server_socket.settimeout(1.0)
+            self.log_msg.emit(f"TCP Server listening on port {self.port}...")
+            self.connected.emit(True)
+        except Exception as e:
+            self.log_msg.emit(f"TCP bind error: {e}")
+            self.connected.emit(False)
+            return
+
+        while self._is_running:
+            try:
+                conn, addr = self.server_socket.accept()
+                self.log_msg.emit(f"ESP32 Connected from {addr}")
+                conn.settimeout(1.0)
+                self._handle_connection(conn)
+            except socket.timeout:
+                pass
+            except Exception as e:
+                if self._is_running:
+                    self.log_msg.emit(f"Accept error: {e}")
+
+        try:
+            self.server_socket.close()
+        except:
+            pass
+        self.connected.emit(False)
+
+    def _handle_connection(self, conn):
+        expected_size = combined_packet_dtype.itemsize
+        try:
+            while self._is_running:
+                data = b''
+                while len(data) < expected_size and self._is_running:
+                    try:
+                        packet = conn.recv(expected_size - len(data))
+                        if not packet:
+                            break
+                        data += packet
+                    except socket.timeout:
+                        pass
+                
+                if len(data) == expected_size:
+                    packet_data = np.frombuffer(data, dtype=combined_packet_dtype)[0]
+                    
+                    self.log_msg.emit(f"Received TCP packet (Seq: {packet_data['sequence']})")
+                    
+                    self.sensor_updated.emit("Battery", f"{packet_data['batteryPercentage']:.1f}")
+                    self.sensor_updated.emit("Lux", f"{packet_data['ambLight']:.1f}")
+                    self.sensor_updated.emit("Ambient-I", str(packet_data['ambLight_Int']))
+                    self.sensor_updated.emit("PIR", f"{packet_data['PIRValue']:.2f}")
+                    
+                    mmwave_val = f"{packet_data['movingDist']},{packet_data['movingEnergy']},{packet_data['staticDist']},{packet_data['staticEnergy']},{packet_data['detectionDist']}"
+                    self.mmwave_updated.emit(mmwave_val)
+                    
+                    self.rgb_full_received.emit(packet_data['rgbFrame'].tobytes())
+                    self.ir_full_received.emit(packet_data['irFrame'].tobytes())
+                else:
+                    break
+        except Exception as e:
+            self.log_msg.emit(f"Stream error: {e}")
+        finally:
+            conn.close()
+            self.log_msg.emit("ESP32 Disconnected")
+
+    def stop(self):
+        self._is_running = False
+
 class DeviceDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -255,6 +363,14 @@ class CameraWidget(QLabel):
             if offset + i < len(self.raw_bytes):
                 self.raw_bytes[offset + i] = b
         if offset + len(chunk) >= len(self.raw_bytes):
+            if self.is_rgb:
+                self.render_rgb()
+            else:
+                self.render_ir()
+                
+    def set_full_frame(self, frame_bytes):
+        if len(frame_bytes) == len(self.raw_bytes):
+            self.raw_bytes[:] = frame_bytes
             if self.is_rgb:
                 self.render_rgb()
             else:
@@ -372,10 +488,11 @@ class SimpleChartWidget(QWidget):
         painter.drawText(w - 35, h - 5, "Now")
 
 
-class RealTimeScreen(QWidget):
+class TcpRealTimeScreen(QWidget):
     def __init__(self):
         super().__init__()
         self.ble_thread = None
+        self.tcp_thread = None
         self.is_connected = False
         self.sensor_values = {
             'Battery': '--', 'Lux': '--', 'Ambient-I': '--', 'PIR': '--',
@@ -399,7 +516,7 @@ class RealTimeScreen(QWidget):
         
         # Header
         header_layout = QHBoxLayout()
-        title = QLabel("Urinfo System")
+        title = QLabel("Urinfo System (TCP)")
         title.setStyleSheet("font-size: 24px; font-weight: bold; color: #c9d1d9;")
         fw_label = QLabel("FW: <span style='color: #8b949e; font-family: monospace;'>--</span>")
         header_layout.addWidget(title)
@@ -529,16 +646,20 @@ class RealTimeScreen(QWidget):
         self.btn_stop.setMinimumHeight(40)
         self.btn_wifi = QPushButton("Send WiFi")
         self.btn_wifi.setMinimumHeight(40)
+        self.btn_tcp = QPushButton("Start TCP Server")
+        self.btn_tcp.setMinimumHeight(40)
         self.btn_ota = QPushButton("Start OTA")
         self.btn_ota.setObjectName("btnOTA")
         self.btn_ota.setMinimumHeight(40)
         self.btn_start.clicked.connect(self.on_start)
         self.btn_stop.clicked.connect(self.on_stop)
         self.btn_wifi.clicked.connect(self.on_wifi_send)
+        self.btn_tcp.clicked.connect(self.on_tcp_start)
         self.btn_ota.clicked.connect(self.on_ota)
         btn_layout.addWidget(self.btn_start)
         btn_layout.addWidget(self.btn_stop)
         btn_layout.addWidget(self.btn_wifi)
+        btn_layout.addWidget(self.btn_tcp)
         btn_layout.addWidget(self.btn_ota)
         layout.addLayout(btn_layout)
         
@@ -591,9 +712,9 @@ class RealTimeScreen(QWidget):
         cam_layout.setSpacing(40)
         
         rgb_group = QVBoxLayout()
-        rgb_title = QLabel("rgb 16*16 at 1second")
+        rgb_title = QLabel("rgb 64*64 at 1second")
         rgb_title.setStyleSheet("font-size: 10px; color: #8b949e; text-transform: uppercase;")
-        self.rgb_canvas = CameraWidget(16, 16, is_rgb=True)
+        self.rgb_canvas = CameraWidget(64, 64, is_rgb=True)
         rgb_group.addWidget(rgb_title)
         rgb_group.addWidget(self.rgb_canvas)
         rgb_group.setAlignment(self.rgb_canvas, Qt.AlignCenter)
@@ -673,6 +794,31 @@ class RealTimeScreen(QWidget):
             offset = int.from_bytes(data[0:2], byteorder='little')
             self.ir_canvas.add_chunk(offset, data[2:])
             
+    def process_rgb_full(self, data):
+        self.rgb_canvas.set_full_frame(data)
+        
+    def process_ir_full(self, data):
+        self.ir_canvas.set_full_frame(data)
+            
+    def on_tcp_start(self):
+        if self.tcp_thread and self.tcp_thread.isRunning():
+            self.tcp_thread.stop()
+            self.tcp_thread.wait() # cleanly exit thread before updating UI
+            self.btn_tcp.setText("Start TCP Server")
+            return
+            
+        self.log_text.append(f"> Starting TCP Server on port 8080...")
+        self.tcp_thread = TcpReceiverThread(port=8080)
+        self.tcp_thread.connected.connect(
+            lambda connected: self.btn_tcp.setText("Stop TCP Server") if connected else self.btn_tcp.setText("Start TCP Server")
+        )
+        self.tcp_thread.log_msg.connect(lambda msg: self.log_text.append(f"> {msg}"))
+        self.tcp_thread.sensor_updated.connect(self.update_sensor_value)
+        self.tcp_thread.mmwave_updated.connect(self.process_mmwave)
+        self.tcp_thread.rgb_full_received.connect(self.process_rgb_full)
+        self.tcp_thread.ir_full_received.connect(self.process_ir_full)
+        self.tcp_thread.start()
+
     def on_ble_connection_changed(self, is_connected):
         self.is_connected = is_connected
         if is_connected:
@@ -694,10 +840,6 @@ class RealTimeScreen(QWidget):
         self.ble_thread = BleConnectionThread(device)
         self.ble_thread.log_msg.connect(lambda msg: self.log_text.append(f"> {msg}"))
         self.ble_thread.connected.connect(self.on_ble_connection_changed)
-        self.ble_thread.sensor_updated.connect(self.update_sensor_value)
-        self.ble_thread.mmwave_updated.connect(self.process_mmwave)
-        self.ble_thread.rgb_chunk_received.connect(self.process_rgb_chunk)
-        self.ble_thread.ir_chunk_received.connect(self.process_ir_chunk)
         self.ble_thread.start()
         
     def on_connect(self):

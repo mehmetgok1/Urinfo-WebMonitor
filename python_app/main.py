@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QVB
 from PyQt5.QtCore import Qt
 from real_time_screen.screen import RealTimeScreen
 from stored_data_screen.screen import StoredDataScreen
-
+from mqqt_real_time_screen.screen import TcpRealTimeScreen
 
 class MonitorApp(QMainWindow):
     def __init__(self):
@@ -19,11 +19,13 @@ class MonitorApp(QMainWindow):
         # Create screens
         self.real_time_screen = RealTimeScreen()
         self.stored_data_screen = StoredDataScreen()
+        self.tcp_screen = TcpRealTimeScreen()
         
         # Add tabs
         self.tabs.addTab(self.real_time_screen, "Real Time Monitor")
         self.tabs.addTab(self.stored_data_screen, "Stored Data Monitor")
-        
+        self.tabs.addTab(self.tcp_screen, "TCP Real Time Monitor")
+
         self.show()
 
 
