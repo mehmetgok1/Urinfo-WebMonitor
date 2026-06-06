@@ -261,12 +261,11 @@ class CameraWidget(QLabel):
                 self.render_ir()
                 
     def render_rgb(self):
-        """Update RGB frame from 16x16 RGB565 data"""
-        for i in range(self.width * self.height):
-            pixel = self.raw_bytes[i*2] | (self.raw_bytes[i*2+1] << 8)
-            self.buffer[i//self.width, i%self.width, 0] = ((pixel >> 11) & 0x1F) * 255 // 31
-            self.buffer[i//self.width, i%self.width, 1] = ((pixel >> 5) & 0x3F) * 255 // 63
-            self.buffer[i//self.width, i%self.width, 2] = (pixel & 0x1F) * 255 // 31
+        """Update RGB frame from RGB565 data"""
+        arr = np.frombuffer(self.raw_bytes, dtype=np.uint16).reshape((self.height, self.width))
+        self.buffer[:, :, 0] = ((arr >> 11) & 0x1F) * 255 // 31
+        self.buffer[:, :, 1] = ((arr >> 5) & 0x3F) * 255 // 63
+        self.buffer[:, :, 2] = (arr & 0x1F) * 255 // 31
         self.update_display()
     
     def render_ir(self):
@@ -279,11 +278,14 @@ class CameraWidget(QLabel):
             maxVal = minVal + 1
         
         norm = (raw_values - minVal) / (maxVal - minVal)
-        for i, t in enumerate(norm):
-            r = min(255, max(0, int(255 * (2.5 * t - 0.5))))
-            g = min(255, max(0, int(255 * (3 * t - 1.5))))
-            b = min(255, max(0, int(255 * (2 * np.sin(np.pi * t)))))
-            self.buffer[i//self.width, i%self.width] = [r, g, b]
+        
+        r = np.clip(255 * (2.5 * norm - 0.5), 0, 255).astype(np.uint8)
+        g = np.clip(255 * (3.0 * norm - 1.5), 0, 255).astype(np.uint8)
+        b = np.clip(255 * (2 * np.sin(np.pi * norm)), 0, 255).astype(np.uint8)
+        
+        self.buffer[:, :, 0] = r.reshape((self.height, self.width))
+        self.buffer[:, :, 1] = g.reshape((self.height, self.width))
+        self.buffer[:, :, 2] = b.reshape((self.height, self.width))
         self.update_display()
     
     def update_display(self):

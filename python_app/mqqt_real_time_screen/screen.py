@@ -10,6 +10,7 @@ from collections import deque
 import numpy as np
 from bleak import BleakScanner, BleakClient
 import socket
+import queue
 
 
 DARK_STYLE = """
@@ -207,16 +208,52 @@ class BleConnectionThread(QThread):
         self._is_running = False
 
 
-class TcpReceiverThread(QThread):
-    connected = pyqtSignal(bool)
+class DataProcessingThread(QThread):
     log_msg = pyqtSignal(str)
     sensor_updated = pyqtSignal(str, str)
     mmwave_updated = pyqtSignal(str)
     rgb_full_received = pyqtSignal(bytes)
     ir_full_received = pyqtSignal(bytes)
 
-    def __init__(self, port=8080):
+    def __init__(self):
         super().__init__()
+        self.data_queue = queue.Queue(maxsize=30)
+        self._is_running = True
+
+    def run(self):
+        while self._is_running:
+            try:
+                data = self.data_queue.get(timeout=0.1)
+                packet_data = np.frombuffer(data, dtype=combined_packet_dtype)[0]
+                
+                self.log_msg.emit(f"Received TCP packet (Seq: {packet_data['sequence']})")
+                
+                self.sensor_updated.emit("Battery", f"{packet_data['batteryPercentage']:.1f}")
+                self.sensor_updated.emit("Lux", f"{packet_data['ambLight']:.1f}")
+                self.sensor_updated.emit("Ambient-I", str(packet_data['ambLight_Int']))
+                self.sensor_updated.emit("PIR", f"{packet_data['PIRValue']:.2f}")
+                
+                mmwave_val = f"{packet_data['movingDist']},{packet_data['movingEnergy']},{packet_data['staticDist']},{packet_data['staticEnergy']},{packet_data['detectionDist']}"
+                self.mmwave_updated.emit(mmwave_val)
+                
+                self.rgb_full_received.emit(packet_data['rgbFrame'].tobytes())
+                self.ir_full_received.emit(packet_data['irFrame'].tobytes())
+            except queue.Empty:
+                pass
+            except Exception as e:
+                self.log_msg.emit(f"Processing error: {e}")
+
+    def stop(self):
+        self._is_running = False
+
+
+class TcpReceiverThread(QThread):
+    connected = pyqtSignal(bool)
+    log_msg = pyqtSignal(str)
+
+    def __init__(self, data_queue, port=8080):
+        super().__init__()
+        self.data_queue = data_queue
         self.port = port
         self._is_running = True
         self.server_socket = None
@@ -224,6 +261,11 @@ class TcpReceiverThread(QThread):
     def run(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
+        # Optimize Python socket for high-throughput streaming
+        self.server_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 1024)
+        
         try:
             self.server_socket.bind(('0.0.0.0', self.port))
             self.server_socket.listen(1)
@@ -268,20 +310,10 @@ class TcpReceiverThread(QThread):
                         pass
                 
                 if len(data) == expected_size:
-                    packet_data = np.frombuffer(data, dtype=combined_packet_dtype)[0]
-                    
-                    self.log_msg.emit(f"Received TCP packet (Seq: {packet_data['sequence']})")
-                    
-                    self.sensor_updated.emit("Battery", f"{packet_data['batteryPercentage']:.1f}")
-                    self.sensor_updated.emit("Lux", f"{packet_data['ambLight']:.1f}")
-                    self.sensor_updated.emit("Ambient-I", str(packet_data['ambLight_Int']))
-                    self.sensor_updated.emit("PIR", f"{packet_data['PIRValue']:.2f}")
-                    
-                    mmwave_val = f"{packet_data['movingDist']},{packet_data['movingEnergy']},{packet_data['staticDist']},{packet_data['staticEnergy']},{packet_data['detectionDist']}"
-                    self.mmwave_updated.emit(mmwave_val)
-                    
-                    self.rgb_full_received.emit(packet_data['rgbFrame'].tobytes())
-                    self.ir_full_received.emit(packet_data['irFrame'].tobytes())
+                    try:
+                        self.data_queue.put_nowait(data)
+                    except queue.Full:
+                        self.log_msg.emit("Warning: Processing queue full, dropped TCP packet")
                 else:
                     break
         except Exception as e:
@@ -377,12 +409,11 @@ class CameraWidget(QLabel):
                 self.render_ir()
                 
     def render_rgb(self):
-        """Update RGB frame from 16x16 RGB565 data"""
-        for i in range(self.width * self.height):
-            pixel = self.raw_bytes[i*2] | (self.raw_bytes[i*2+1] << 8)
-            self.buffer[i//self.width, i%self.width, 0] = ((pixel >> 11) & 0x1F) * 255 // 31
-            self.buffer[i//self.width, i%self.width, 1] = ((pixel >> 5) & 0x3F) * 255 // 63
-            self.buffer[i//self.width, i%self.width, 2] = (pixel & 0x1F) * 255 // 31
+        """Update RGB frame from RGB565 data"""
+        arr = np.frombuffer(self.raw_bytes, dtype=np.uint16).reshape((self.height, self.width))
+        self.buffer[:, :, 0] = ((arr >> 11) & 0x1F) * 255 // 31
+        self.buffer[:, :, 1] = ((arr >> 5) & 0x3F) * 255 // 63
+        self.buffer[:, :, 2] = (arr & 0x1F) * 255 // 31
         self.update_display()
     
     def render_ir(self):
@@ -395,11 +426,14 @@ class CameraWidget(QLabel):
             maxVal = minVal + 1
         
         norm = (raw_values - minVal) / (maxVal - minVal)
-        for i, t in enumerate(norm):
-            r = min(255, max(0, int(255 * (2.5 * t - 0.5))))
-            g = min(255, max(0, int(255 * (3 * t - 1.5))))
-            b = min(255, max(0, int(255 * (2 * np.sin(np.pi * t)))))
-            self.buffer[i//self.width, i%self.width] = [r, g, b]
+        
+        r = np.clip(255 * (2.5 * norm - 0.5), 0, 255).astype(np.uint8)
+        g = np.clip(255 * (3.0 * norm - 1.5), 0, 255).astype(np.uint8)
+        b = np.clip(255 * (2 * np.sin(np.pi * norm)), 0, 255).astype(np.uint8)
+        
+        self.buffer[:, :, 0] = r.reshape((self.height, self.width))
+        self.buffer[:, :, 1] = g.reshape((self.height, self.width))
+        self.buffer[:, :, 2] = b.reshape((self.height, self.width))
         self.update_display()
     
     def update_display(self):
@@ -493,6 +527,7 @@ class TcpRealTimeScreen(QWidget):
         super().__init__()
         self.ble_thread = None
         self.tcp_thread = None
+        self.processing_thread = None
         self.is_connected = False
         self.sensor_values = {
             'Battery': '--', 'Lux': '--', 'Ambient-I': '--', 'PIR': '--',
@@ -618,16 +653,16 @@ class TcpRealTimeScreen(QWidget):
         self.input_version.setMinimumHeight(35)
         self.input_wifi = QLineEdit()
         self.input_wifi.setPlaceholderText("WiFi Name")
-        self.input_wifi.setText("Galaxy S20 FE 89BD")
+        self.input_wifi.setText("Zyxel_B321")
         self.input_wifi.setMinimumHeight(35)
         self.input_pass = QLineEdit()
         self.input_pass.setPlaceholderText("WiFi Password")
-        self.input_pass.setText("hjkb6776")
+        self.input_pass.setText("MYSA4646")
         self.input_pass.setEchoMode(QLineEdit.Password)
         self.input_pass.setMinimumHeight(35)
         self.input_ip = QLineEdit()
         self.input_ip.setPlaceholderText("IP Address")
-        self.input_ip.setText("10.230.221.118")
+        self.input_ip.setText("192.168.1.186")
         self.input_ip.setMinimumHeight(35)
         
         input_layout.addWidget(self.input_label)
@@ -804,19 +839,27 @@ class TcpRealTimeScreen(QWidget):
         if self.tcp_thread and self.tcp_thread.isRunning():
             self.tcp_thread.stop()
             self.tcp_thread.wait() # cleanly exit thread before updating UI
+            if self.processing_thread and self.processing_thread.isRunning():
+                self.processing_thread.stop()
+                self.processing_thread.wait()
             self.btn_tcp.setText("Start TCP Server")
             return
             
         self.log_text.append(f"> Starting TCP Server on port 8080...")
-        self.tcp_thread = TcpReceiverThread(port=8080)
+        
+        self.processing_thread = DataProcessingThread()
+        self.processing_thread.log_msg.connect(lambda msg: self.log_text.append(f"> {msg}"))
+        self.processing_thread.sensor_updated.connect(self.update_sensor_value)
+        self.processing_thread.mmwave_updated.connect(self.process_mmwave)
+        self.processing_thread.rgb_full_received.connect(self.process_rgb_full)
+        self.processing_thread.ir_full_received.connect(self.process_ir_full)
+        self.processing_thread.start()
+        
+        self.tcp_thread = TcpReceiverThread(self.processing_thread.data_queue, port=8080)
         self.tcp_thread.connected.connect(
             lambda connected: self.btn_tcp.setText("Stop TCP Server") if connected else self.btn_tcp.setText("Start TCP Server")
         )
         self.tcp_thread.log_msg.connect(lambda msg: self.log_text.append(f"> {msg}"))
-        self.tcp_thread.sensor_updated.connect(self.update_sensor_value)
-        self.tcp_thread.mmwave_updated.connect(self.process_mmwave)
-        self.tcp_thread.rgb_full_received.connect(self.process_rgb_full)
-        self.tcp_thread.ir_full_received.connect(self.process_ir_full)
         self.tcp_thread.start()
 
     def on_ble_connection_changed(self, is_connected):
