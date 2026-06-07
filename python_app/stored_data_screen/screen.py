@@ -103,7 +103,7 @@ class DataLoaderThread(QThread):
                     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
                     img_rgb = np.rot90(img_rgb, k=1)
                     h, w, c = img_rgb.shape
-                    qimg_rgb = QImage(img_rgb.data, w, h, 3 * w, QImage.Format_RGB888).copy()
+                    qimg_rgb = QImage(img_rgb.tobytes(), w, h, 3 * w, QImage.Format_RGB888).copy()
                     rgb_frames.append(qimg_rgb)
                     
                     # Process IR Thermal Heatmap
@@ -115,7 +115,7 @@ class DataLoaderThread(QThread):
                     mapped = (norm * 255).astype(np.uint8)
                     heatmap = cv2.applyColorMap(mapped, cv2.COLORMAP_HOT)
                     heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-                    qimg_ir = QImage(heatmap_rgb.data, 16, 12, 3 * 16, QImage.Format_RGB888).copy()
+                    qimg_ir = QImage(heatmap_rgb.tobytes(), 16, 12, 3 * 16, QImage.Format_RGB888).copy()
                     ir_frames.append(qimg_ir)
                     
                     # Collect Audio

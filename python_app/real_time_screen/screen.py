@@ -292,7 +292,7 @@ class CameraWidget(QLabel):
     def update_display(self):
         h, w = self.buffer.shape[:2]
         bytes_per_line = 3 * w
-        img = QImage(self.buffer.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        img = QImage(self.buffer.tobytes(), w, h, bytes_per_line, QImage.Format_RGB888)
         if self.is_rgb:
             scale_factor = 1.45
             scaled_size = int(128 * scale_factor)
