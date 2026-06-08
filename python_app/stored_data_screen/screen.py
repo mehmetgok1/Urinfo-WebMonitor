@@ -295,8 +295,22 @@ class StoredDataScreen(QWidget):
         self.rgb_view.setFixedSize(384, 384)  
         self.rgb_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
         self.rgb_view.setAlignment(Qt.AlignCenter)
+        
+        # Center Color Detection UI
+        color_hbox = QHBoxLayout()
+        self.lbl_rgb_avg_text = QLabel("Center 16x16: --")
+        self.lbl_rgb_avg_text.setStyleSheet("color: #8b949e; font-size: 11px; font-weight: bold;")
+        self.lbl_rgb_avg_color = QLabel()
+        self.lbl_rgb_avg_color.setFixedSize(16, 16)
+        self.lbl_rgb_avg_color.setStyleSheet("background-color: transparent; border: 1px solid #30363d; border-radius: 4px;")
+        color_hbox.addStretch()
+        color_hbox.addWidget(self.lbl_rgb_avg_text)
+        color_hbox.addWidget(self.lbl_rgb_avg_color)
+        color_hbox.addStretch()
+        
         rgb_vbox.addWidget(rgb_lbl)
         rgb_vbox.addWidget(self.rgb_view)
+        rgb_vbox.addLayout(color_hbox)
         
         # IR Square
         ir_vbox = QVBoxLayout()
@@ -432,8 +446,24 @@ class StoredDataScreen(QWidget):
         self.lbl_frame_info.setText(f"Frame: {index + 1} / {len(self.rgb_frames)}")
         
         if 0 <= index < len(self.rgb_frames):
-            rgb_pix = QPixmap.fromImage(self.rgb_frames[index]).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            img = self.rgb_frames[index]
+            rgb_pix = QPixmap.fromImage(img).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             self.rgb_view.setPixmap(rgb_pix)
+            
+            # --- Calculate average color for center 16x16 ---
+            r_sum = g_sum = b_sum = 0
+            # Center 16x16 in a 64x64 image is exactly from index 24 to 40
+            for x in range(24, 40):
+                for y in range(24, 40):
+                    c = img.pixelColor(x, y)
+                    r_sum += c.red()
+                    g_sum += c.green()
+                    b_sum += c.blue()
+                    
+            avg_r, avg_g, avg_b = r_sum // 256, g_sum // 256, b_sum // 256
+            hex_color = f"#{avg_r:02x}{avg_g:02x}{avg_b:02x}"
+            self.lbl_rgb_avg_text.setText(f"Center 16x16: {hex_color.upper()}")
+            self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
             
             ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             self.ir_view.setPixmap(ir_pix)
