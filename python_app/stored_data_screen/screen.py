@@ -296,21 +296,21 @@ class StoredDataScreen(QWidget):
         self.rgb_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
         self.rgb_view.setAlignment(Qt.AlignCenter)
         
-        # Center Color Detection UI
-        color_hbox = QHBoxLayout()
-        self.lbl_rgb_avg_text = QLabel("Center 16x16: --")
+        # Center Color Detection UI (Vertical layout for the left side)
+        color_vbox = QVBoxLayout()
+        self.lbl_rgb_avg_text = QLabel("Center\n16x16\n--")
+        self.lbl_rgb_avg_text.setAlignment(Qt.AlignCenter)
         self.lbl_rgb_avg_text.setStyleSheet("color: #8b949e; font-size: 11px; font-weight: bold;")
         self.lbl_rgb_avg_color = QLabel()
-        self.lbl_rgb_avg_color.setFixedSize(16, 16)
+        self.lbl_rgb_avg_color.setFixedSize(24, 24)
         self.lbl_rgb_avg_color.setStyleSheet("background-color: transparent; border: 1px solid #30363d; border-radius: 4px;")
-        color_hbox.addStretch()
-        color_hbox.addWidget(self.lbl_rgb_avg_text)
-        color_hbox.addWidget(self.lbl_rgb_avg_color)
-        color_hbox.addStretch()
+        color_vbox.addStretch()
+        color_vbox.addWidget(self.lbl_rgb_avg_text, alignment=Qt.AlignCenter)
+        color_vbox.addWidget(self.lbl_rgb_avg_color, alignment=Qt.AlignCenter)
+        color_vbox.addStretch()
         
         rgb_vbox.addWidget(rgb_lbl)
         rgb_vbox.addWidget(self.rgb_view)
-        rgb_vbox.addLayout(color_hbox)
         
         # IR Square
         ir_vbox = QVBoxLayout()
@@ -324,6 +324,8 @@ class StoredDataScreen(QWidget):
         ir_vbox.addWidget(self.ir_view)
         
         video_layout.addStretch()
+        video_layout.addLayout(color_vbox)
+        video_layout.addSpacing(15)
         video_layout.addLayout(rgb_vbox)
         video_layout.addSpacing(40)
         video_layout.addLayout(ir_vbox)
@@ -462,7 +464,7 @@ class StoredDataScreen(QWidget):
                     
             avg_r, avg_g, avg_b = r_sum // 256, g_sum // 256, b_sum // 256
             hex_color = f"#{avg_r:02x}{avg_g:02x}{avg_b:02x}"
-            self.lbl_rgb_avg_text.setText(f"Center 16x16: {hex_color.upper()}")
+            self.lbl_rgb_avg_text.setText(f"Center\n16x16\n{hex_color.upper()}")
             self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
             
             ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
