@@ -1,10 +1,10 @@
 import os
 import cv2
 import numpy as np
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-                             QFileDialog, QSlider, QProgressBar, QMessageBox)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, 
+                             QFileDialog, QSlider, QProgressBar, QMessageBox, QScrollArea)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QPen, QPainterPath
 import re
 
 DARK_STYLE = """
@@ -69,6 +69,91 @@ combined_packet_dtype = np.dtype([
     ('rgbFrame', 'u2', (4096,)), 
     ('irFrame', 'u2', (192,))
 ])
+
+
+class MiniPlotWidget(QWidget):
+    def __init__(self, title, color_hex):
+        super().__init__()
+        self.title = title
+        self.color = QColor(color_hex)
+        self.data = np.array([])
+        self.current_idx = 0
+        self.setMinimumHeight(120)
+        self.setMinimumWidth(150)
+        self.setStyleSheet("background-color: #1c2128; border: 1px solid #30363d; border-radius: 8px;")
+
+    def set_data(self, data):
+        self.data = data
+        self.update()
+
+    def set_current_index(self, idx):
+        self.current_idx = idx
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        painter.setPen(QColor("#8b949e"))
+        font = painter.font()
+        font.setPixelSize(11)
+        painter.setFont(font)
+        painter.drawText(10, 18, self.title)
+        
+        if len(self.data) < 2:
+            return
+            
+        w = self.width()
+        h = self.height()
+        
+        # Handle potential NaNs for float arrays
+        valid_data = self.data[~np.isnan(self.data)] if self.data.dtype.kind in 'fc' else self.data
+        if len(valid_data) == 0:
+            return
+            
+        min_v = np.min(valid_data)
+        max_v = np.max(valid_data)
+        if max_v == min_v:
+            max_v = min_v + 1
+            min_v = min_v - 1
+            
+        pad_x = 35
+        pad_y_top = 25
+        pad_y_bottom = 15
+        
+        path = QPainterPath()
+        num_points = len(self.data)
+        # Subsample if there are more points than 2x the width for drawing performance
+        step = max(1, num_points // (w * 2))
+        
+        started = False
+        for i in range(0, num_points, step):
+            val = self.data[i]
+            x = pad_x + (w - 2 * pad_x) * (i / (num_points - 1))
+            y = h - pad_y_bottom - (h - pad_y_top - pad_y_bottom) * (val - min_v) / (max_v - min_v)
+            if not started:
+                path.moveTo(x, y)
+                started = True
+            else:
+                path.lineTo(x, y)
+                
+        pen = QPen(self.color, 1.5)
+        painter.setPen(pen)
+        painter.drawPath(path)
+        
+        # Draw a dashed line marking the current frame index
+        if 0 <= self.current_idx < num_points:
+            marker_x = pad_x + (w - 2 * pad_x) * (self.current_idx / (num_points - 1))
+            painter.setPen(QPen(QColor("#ffffff"), 1, Qt.DashLine))
+            painter.drawLine(int(marker_x), pad_y_top, int(marker_x), h - pad_y_bottom)
+        
+        painter.setPen(QColor("#8b949e"))
+        font.setPixelSize(9)
+        painter.setFont(font)
+        
+        painter.drawText(2, pad_y_top + 4, f"{max_v:.1f}")
+        painter.drawText(2, h - pad_y_bottom, f"{min_v:.1f}")
 
 
 class DataLoaderThread(QThread):
@@ -171,7 +256,15 @@ class StoredDataScreen(QWidget):
     
     def init_ui(self):
         """Initialize the UI for stored data monitoring"""
-        layout = QVBoxLayout()
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
         
@@ -223,6 +316,24 @@ class StoredDataScreen(QWidget):
         video_layout.addStretch()
         layout.addLayout(video_layout)
         
+        # Mini Plots Grid (3 per row)
+        self.plot_keys = [
+            ('temperature', 'Temperature (°C)', '#ff7b72'),
+            ('humidity', 'Humidity (%)', '#79c0ff'),
+            ('batteryPercentage', 'Battery (%)', '#39d353'),
+            ('PIRValue', 'PIR Value', '#d2a8ff'),
+            ('movingDist', 'Moving Dist (mm)', '#ffa657'),
+            ('ambLight', 'Ambient Light', '#f2cc60')
+        ]
+        self.mini_plots = {}
+        plots_layout = QGridLayout()
+        plots_layout.setSpacing(10)
+        for i, (key, title, color) in enumerate(self.plot_keys):
+            plot_widget = MiniPlotWidget(title, color)
+            self.mini_plots[key] = plot_widget
+            plots_layout.addWidget(plot_widget, i // 3, i % 3)
+        layout.addLayout(plots_layout)
+        
         # Bottom Panel: Controls
         controls_layout = QVBoxLayout()
         
@@ -255,7 +366,8 @@ class StoredDataScreen(QWidget):
         layout.addLayout(controls_layout)
         
         layout.addStretch()
-        self.setLayout(layout)
+        scroll.setWidget(content_widget)
+        main_layout.addWidget(scroll)
         self.setStyleSheet(DARK_STYLE)
 
     def select_folder(self):
@@ -291,6 +403,13 @@ class StoredDataScreen(QWidget):
         else:
             self.audio_data = np.array([])
         
+        # Send the isolated arrays to their respective MiniPlots
+        for key, plot_widget in self.mini_plots.items():
+            if key in sensor_data and len(sensor_data[key]) > 0:
+                plot_widget.set_data(sensor_data[key])
+            else:
+                plot_widget.set_data(np.array([]))
+        
         if self.rgb_frames:
             self.slider.setRange(0, len(self.rgb_frames) - 1)
             self.slider.setValue(0)
@@ -318,6 +437,10 @@ class StoredDataScreen(QWidget):
             
             ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             self.ir_view.setPixmap(ir_pix)
+
+        # Tell the plots to draw the marker line at the current timeline index
+        for plot_widget in self.mini_plots.values():
+            plot_widget.set_current_index(index)
 
     def toggle_playback(self):
         if self.timer.isActive():
