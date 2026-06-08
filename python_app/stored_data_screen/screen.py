@@ -73,7 +73,7 @@ combined_packet_dtype = np.dtype([
 
 class DataLoaderThread(QThread):
     progress = pyqtSignal(int)
-    finished_data = pyqtSignal(list, list, np.ndarray)
+    finished_data = pyqtSignal(list, list, dict)
     error = pyqtSignal(str)
 
     def __init__(self, folder_path):
@@ -96,12 +96,30 @@ class DataLoaderThread(QThread):
 
             rgb_frames = []
             ir_frames = []
-            audio_chunks = []
+            
+            # Dictionary to strictly separate out all other variables
+            sensor_data = {
+                'timestamp_ms': [], 'sequence': [], 'status': [],
+                'batteryLevel': [], 'batteryPercentage': [],
+                'ambLight': [], 'ambLight_Int': [], 'ambientLight_slave': [],
+                'PIRValue': [], 'movingDist': [], 'movingEnergy': [],
+                'staticDist': [], 'staticEnergy': [], 'detectionDist': [],
+                'temperature': [], 'humidity': [],
+                'accelX': [], 'accelY': [], 'accelZ': [],
+                'gyroX': [], 'gyroY': [], 'gyroZ': [],
+                'accelSampleCount': [],
+                'accelX_samples': [], 'accelY_samples': [], 'accelZ_samples': [],
+                'microphoneSamples': []
+            }
             
             total_files = len(bin_files)
             for i, bin_file in enumerate(bin_files):
                 full_path = os.path.join(self.folder_path, bin_file)
                 data = np.fromfile(full_path, dtype=combined_packet_dtype)
+                
+                # Cleanly extract all individual fields into their own separated arrays
+                for key in sensor_data.keys():
+                    sensor_data[key].append(data[key])
                 
                 for packet in data:
                     # Process RGB Frame
@@ -124,17 +142,17 @@ class DataLoaderThread(QThread):
                     qimg_ir = QImage(heatmap_rgb.tobytes(), 16, 12, 3 * 16, QImage.Format_RGB888).copy()
                     ir_frames.append(qimg_ir)
                     
-                    # Collect Audio
-                    audio_chunks.append(packet['microphoneSamples'])
                 
                 self.progress.emit(int(((i + 1) / total_files) * 100))
 
-            if audio_chunks:
-                audio_data = np.concatenate(audio_chunks)
-            else:
-                audio_data = np.array([], dtype=np.uint16)
+            # Concatenate all lists of arrays into cleanly separated flat/2D numpy arrays
+            for key in sensor_data.keys():
+                if sensor_data[key]:
+                    sensor_data[key] = np.concatenate(sensor_data[key])
+                else:
+                    sensor_data[key] = np.array([])
 
-            self.finished_data.emit(rgb_frames, ir_frames, audio_data)
+            self.finished_data.emit(rgb_frames, ir_frames, sensor_data)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -144,6 +162,7 @@ class StoredDataScreen(QWidget):
         super().__init__()
         self.rgb_frames = []
         self.ir_frames = []
+        self.sensor_data = {}
         self.audio_data = None
         self.current_frame = 0
         self.timer = QTimer()
@@ -259,12 +278,18 @@ class StoredDataScreen(QWidget):
         self.loader.error.connect(self.on_load_error)
         self.loader.start()
 
-    def on_data_loaded(self, rgb, ir, audio):
+    def on_data_loaded(self, rgb, ir, sensor_data):
         self.progress_bar.setVisible(False)
         self.btn_select_folder.setEnabled(True)
         self.rgb_frames = rgb
         self.ir_frames = ir
-        self.audio_data = audio
+        self.sensor_data = sensor_data
+        
+        # Preserve the flattened audio data specifically for the audio plot function
+        if 'microphoneSamples' in sensor_data and len(sensor_data['microphoneSamples']) > 0:
+            self.audio_data = sensor_data['microphoneSamples'].flatten()
+        else:
+            self.audio_data = np.array([])
         
         if self.rgb_frames:
             self.slider.setRange(0, len(self.rgb_frames) - 1)
