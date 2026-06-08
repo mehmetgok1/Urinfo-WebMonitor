@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
                              QFileDialog, QSlider, QProgressBar, QMessageBox)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QImage, QPixmap
-
+import re
 
 DARK_STYLE = """
     QWidget {
@@ -79,10 +79,17 @@ class DataLoaderThread(QThread):
     def __init__(self, folder_path):
         super().__init__()
         self.folder_path = folder_path
-
+    
+    def extract_number(self, filename):
+        # Finds all digits in the filename and turns them into an integer
+        match = re.search(r'\d+', filename)
+        return int(match.group()) if match else 0
+    
     def run(self):
         try:
-            bin_files = sorted([f for f in os.listdir(self.folder_path) if f.endswith(".bin")])
+            bin_files = sorted(
+            [f for f in os.listdir(self.folder_path) if f.endswith(".bin")], 
+            key=self.extract_number)
             if not bin_files:
                 self.error.emit("No .bin files found in selected folder.")
                 return
@@ -101,7 +108,6 @@ class DataLoaderThread(QThread):
                     rgb_raw = packet['rgbFrame'].view(np.uint8).reshape((64, 64, 2))
                     img_bgr = cv2.cvtColor(rgb_raw, cv2.COLOR_BGR5652BGR)
                     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-                    img_rgb = np.rot90(img_rgb, k=1)
                     h, w, c = img_rgb.shape
                     qimg_rgb = QImage(img_rgb.tobytes(), w, h, 3 * w, QImage.Format_RGB888).copy()
                     rgb_frames.append(qimg_rgb)
@@ -113,7 +119,7 @@ class DataLoaderThread(QThread):
                     if max_val == min_val: max_val = min_val + 1
                     norm = (ir_celsius - min_val) / (max_val - min_val)
                     mapped = (norm * 255).astype(np.uint8)
-                    heatmap = cv2.applyColorMap(mapped, cv2.COLORMAP_HOT)
+                    heatmap = cv2.applyColorMap(mapped, cv2.COLORMAP_TURBO)
                     heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
                     qimg_ir = QImage(heatmap_rgb.tobytes(), 16, 12, 3 * 16, QImage.Format_RGB888).copy()
                     ir_frames.append(qimg_ir)
@@ -174,7 +180,7 @@ class StoredDataScreen(QWidget):
         rgb_lbl = QLabel("RGB Camera Video")
         rgb_lbl.setAlignment(Qt.AlignCenter)
         self.rgb_view = QLabel()
-        self.rgb_view.setFixedSize(256, 256)
+        self.rgb_view.setFixedSize(384, 384)  
         self.rgb_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
         self.rgb_view.setAlignment(Qt.AlignCenter)
         rgb_vbox.addWidget(rgb_lbl)
@@ -185,7 +191,7 @@ class StoredDataScreen(QWidget):
         ir_lbl = QLabel("Thermal IR Video")
         ir_lbl.setAlignment(Qt.AlignCenter)
         self.ir_view = QLabel()
-        self.ir_view.setFixedSize(256, 256)
+        self.ir_view.setFixedSize(384, 384)
         self.ir_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
         self.ir_view.setAlignment(Qt.AlignCenter)
         ir_vbox.addWidget(ir_lbl)
@@ -282,10 +288,10 @@ class StoredDataScreen(QWidget):
         self.lbl_frame_info.setText(f"Frame: {index + 1} / {len(self.rgb_frames)}")
         
         if 0 <= index < len(self.rgb_frames):
-            rgb_pix = QPixmap.fromImage(self.rgb_frames[index]).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            rgb_pix = QPixmap.fromImage(self.rgb_frames[index]).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             self.rgb_view.setPixmap(rgb_pix)
             
-            ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             self.ir_view.setPixmap(ir_pix)
 
     def toggle_playback(self):
