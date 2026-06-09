@@ -523,7 +523,7 @@ class RealTimeScreen(QWidget):
         self.input_pass.setMinimumHeight(35)
         self.input_ip = QLineEdit()
         self.input_ip.setPlaceholderText("IP Address")
-        self.input_ip.setText("192.168.1.186")
+        self.input_ip.setText("10.230.221.118")
         self.input_ip.setMinimumHeight(35)
         
         input_layout.addWidget(self.input_label)

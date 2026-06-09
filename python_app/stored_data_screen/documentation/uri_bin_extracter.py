@@ -34,7 +34,7 @@ combined_packet_dtype = np.dtype([
 ])
 
 # AYARLAR
-session_path = "/media/deso/disk/20260608_143916/"
+session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/received_sessions/20260609_155345/"
 session_id = os.path.basename(session_path)
 output_base = os.path.join("./processed_sessions", session_id)
 

@@ -166,15 +166,16 @@ class DataLoaderThread(QThread):
         self.folder_path = folder_path
     
     def extract_number(self, filename):
-        # Finds all digits in the filename and turns them into an integer
-        match = re.search(r'\d+', filename)
-        return int(match.group()) if match else 0
+        # Specifically finds the digits that come AFTER '_part_'
+        match = re.search(r'_part_(\d+)', filename)
+        return int(match.group(1)) if match else 0
     
     def run(self):
         try:
             bin_files = sorted(
             [f for f in os.listdir(self.folder_path) if f.endswith(".bin")], 
-            key=self.extract_number)
+            key=self.extract_number
+            )
             if not bin_files:
                 self.error.emit("No .bin files found in selected folder.")
                 return
