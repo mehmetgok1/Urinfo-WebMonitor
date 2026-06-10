@@ -1,0 +1,15 @@
+services:
+  esp-data-receiver:
+    build:
+      context: ./http_handler_service
+    container_name: esp_data_receiver
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - DATA_DIR=/app/received_sessions
+    volumes:
+      # Maps a folder on your server host to the container's data folder
+      # Change "./srv_bin_data" to whatever folder path you prefer on the host
+      - ./srv_bin_data:/app/received_sessions
+    restart: unless-stopped
