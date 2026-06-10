@@ -3,7 +3,7 @@ import cv2
 import os
 import csv
 
-# 1. KESİN STRUCT TANIMI (sizeof = 24633 bytes)
+# 1. STRUCT TANIMI (sizeof = 24633 bytes)
 combined_packet_dtype = np.dtype([
     ('batteryLevel', 'f4'),
     ('batteryPercentage', 'f4'),
@@ -15,7 +15,6 @@ combined_packet_dtype = np.dtype([
     ('staticDist', 'u2'),
     ('staticEnergy', 'u1'),
     ('detectionDist', 'u2'),
-    # SlaveDataPacket başlangıcı
     ('sequence', 'u2'),
     ('ambientLight_slave', 'u2'),
     ('temperature', 'f4'),
@@ -33,12 +32,13 @@ combined_packet_dtype = np.dtype([
     ('irFrame', 'u2', (192,))     # 16x12
 ])
 
+PACKET_SIZE = combined_packet_dtype.itemsize # 24633 bytes
+
 # AYARLAR
-session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/received_sessions/20260609_155345/"
+session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/"
 session_id = os.path.basename(session_path)
 output_base = os.path.join("./processed_sessions", session_id)
 
-# Alt klasörleri oluştur
 dirs = {
     "rgb": os.path.join(output_base, "colored_image"),
     "ir": os.path.join(output_base, "irimage"),
@@ -47,14 +47,15 @@ dirs = {
 }
 for d in dirs.values(): os.makedirs(d, exist_ok=True)
 
-# Ana CSV dosyalarını hazırla
 sensor_csv_path = os.path.join(dirs["sensors"], "all_sensors.csv")
 motion_csv_path = os.path.join(dirs["motion_audio"], "accel_mic_stream.csv")
 
 print(f"Oturum işleniyor: {session_id}")
 
-# 2. TÜM BIN DOSYALARINI SIRALA VE OKU
 bin_files = sorted([f for f in os.listdir(session_path) if f.endswith(".bin")])
+
+# Küresel sequence takibi (Dosyalar arası süreklilik varsa)
+last_sequence = None 
 
 with open(sensor_csv_path, 'w', newline='') as f_sensor, \
      open(motion_csv_path, 'w', newline='') as f_motion:
@@ -62,18 +63,65 @@ with open(sensor_csv_path, 'w', newline='') as f_sensor, \
     writer_s = csv.writer(f_sensor)
     writer_m = csv.writer(f_motion)
 
-    # Başlıkları yaz
     writer_s.writerow(["timestamp_ms", "sequence", "battery_pct", "ambLight_M", "PIR", "mmWave_dist", "temp", "humi", "ambLight_S"])
     writer_m.writerow(["timestamp_ms", "accelX", "accelY", "accelZ", "mic"])
 
     for bin_file in bin_files:
         full_path = os.path.join(session_path, bin_file)
-        data = np.fromfile(full_path, dtype=combined_packet_dtype)
-        print(f"Dosya okundu: {bin_file} ({len(data)} paket)")
+        
+        # Dosya boyutunu kontrol et
+        file_size = os.path.getsize(full_path)
+        expected_packets = file_size // PACKET_SIZE
+        print(f"\nDosya: {bin_file} | Boyut: {file_size} bytes | Beklenen Paket: {expected_packets}")
 
-        for packet in data:
+        with open(full_path, 'rb') as bin_f:
+            file_bytes = bin_f.read()
+            
+        pointer = 0
+        packet_idx = 0
+        
+        while pointer <= len(file_bytes) - PACKET_SIZE:
+            raw_bytes = file_bytes[pointer:pointer+PACKET_SIZE]
+            packet = np.frombuffer(raw_bytes, dtype=combined_packet_dtype)[0]
+            
             ts = packet['timestamp_ms']
             seq = packet['sequence']
+            bat = packet['batteryPercentage']
+            temp = packet['temperature']
+            sample_count = packet['accelSampleCount']
+
+            # --- SANITY CHECK (GÜVENİLİRLİK VE HİZALAMA KONTROLÜ) ---
+            is_valid = True
+            if sample_count != 2000: is_valid = False
+            if not (0.0 <= bat <= 100.0): is_valid = False
+            if not (-40.0 <= temp <= 125.0): is_valid = False
+            
+            if not is_valid:
+                print(f"  [KAYIP/BOZULMA] Senkronizasyon bozuldu! (Offset: {pointer}). Kurtarılıyor...")
+                recovered = False
+                # Byte byte ileri sararak yeni bir geçerli paket başı ara (0xD0 0x07 = 2000 @ offset 55)
+                for scan_ptr in range(pointer + 1, len(file_bytes) - PACKET_SIZE):
+                    if file_bytes[scan_ptr+55] == 0xD0 and file_bytes[scan_ptr+56] == 0x07:
+                        test_packet = np.frombuffer(file_bytes[scan_ptr:scan_ptr+PACKET_SIZE], dtype=combined_packet_dtype)[0]
+                        if (0.0 <= test_packet['batteryPercentage'] <= 100.0) and (-40.0 <= test_packet['temperature'] <= 125.0):
+                            print(f"  [BAŞARILI] {scan_ptr - pointer} byte atlanarak senkronizasyon sağlandı! Yeni Seq: {test_packet['sequence']}")
+                            pointer = scan_ptr
+                            recovered = True
+                            break
+                
+                if not recovered:
+                    print("  [HATA] Dosyanın geri kalanında geçerli paket bulunamadı. Sonraki dosyaya geçiliyor.")
+                    break
+                continue
+            
+            # --- SEQUENCE VE EKSİK PAKET KONTROLÜ ---
+            if last_sequence is not None:
+                expected_seq = (last_sequence + 1) % 65536
+                if seq != expected_seq:
+                    print(f"  [BİLGİ] Veri atlaması (Paket düştü). Beklenen Seq: {expected_seq}, Gelen: {seq}")
+            
+            last_sequence = seq
+            packet_idx += 1
 
             # --- A. SENSOR DATA (CSV) ---
             writer_s.writerow([ts, seq, packet['batteryPercentage'], packet['ambLight'], 
@@ -81,22 +129,30 @@ with open(sensor_csv_path, 'w', newline='') as f_sensor, \
                                packet['humidity'], packet['ambientLight_slave']])
 
             # --- B. ACCEL & MIC (CSV) ---
-            # 2000 satır boyunca her örneği yaz
             for j in range(2000):
                 writer_m.writerow([ts, packet['accelX_samples'][j], packet['accelY_samples'][j], 
                                    packet['accelZ_samples'][j], packet['microphoneSamples'][j]])
 
             # --- C. RGB IMAGE (PNG) ---
-            rgb_raw = packet['rgbFrame'].view(np.uint8).reshape((64, 64, 2))
-            img_bgr = cv2.cvtColor(rgb_raw, cv2.COLOR_BGR5652BGR)
-            large_rgb = cv2.resize(img_bgr, (256, 256), interpolation=cv2.INTER_NEAREST)
-            cv2.imwrite(os.path.join(dirs["rgb"], f"rgb_{ts}_{seq}.png"), large_rgb)
+            try:
+                rgb_raw = packet['rgbFrame'].view(np.uint8).reshape((64, 64, 2))
+                img_bgr = cv2.cvtColor(rgb_raw, cv2.COLOR_BGR5652BGR)
+                large_rgb = cv2.resize(img_bgr, (256, 256), interpolation=cv2.INTER_NEAREST)
+                cv2.imwrite(os.path.join(dirs["rgb"], f"rgb_{ts}_{seq}.png"), large_rgb)
+            except Exception as e:
+                print(f"  [HATA] RGB Frame dönüştürülemedi (Seq: {seq}): {e}")
 
             # --- D. IR IMAGE (CSV) ---
-            # Her paket için ayrı 16x12 csv
             ir_path = os.path.join(dirs["ir"], f"ir_{ts}_{seq}.csv")
             ir_matrix = packet['irFrame'].reshape((12, 16))
             np.savetxt(ir_path, ir_matrix, delimiter=",", fmt='%u')
+
+            pointer += PACKET_SIZE
+
+        if pointer < len(file_bytes):
+            rem_bytes = len(file_bytes) - pointer
+            if rem_bytes > 0:
+                print(f"  [UYARI] Dosya sonunda {rem_bytes} byte artık veri (dangling bytes) kaldı.")
 
 print(f"\nİşlem Başarıyla Tamamlandı!")
 print(f"Çıktı klasörü: {output_base}")

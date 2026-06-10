@@ -1,0 +1,600 @@
+==================================================================
+                 BINARY STRUCT BOUNDARY REPORT                   
+  Target Struct Size: 24633 bytes
+==================================================================
+
+
+FILE: 20260610_002045_part_650.bin (Total Size: 1227724 bytes)
+--------------------------------------------------------------------------------
+[PACKET 000] Valid Alignment at File Offset: 0 to 24633 bytes
+  ├── [Offset   26] sequence:      650
+  ├── [Offset   50] timestamp_ms:  686376 ms
+  ├── [Offset    4] battery_pct:  41.09%
+  ├── [Offset   30] temperature:  41.27 °C
+  ├── [Offset   34] humidity:     37.04%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [50, 50, 50] | Mic[0..2]: [1598, 1604, 1618]
+  ............................................................
+[PACKET 001] Valid Alignment at File Offset: 24633 to 49266 bytes
+  ├── [Offset   26] sequence:      651
+  ├── [Offset   50] timestamp_ms:  687376 ms
+  ├── [Offset    4] battery_pct:  41.11%
+  ├── [Offset   30] temperature:  41.16 °C
+  ├── [Offset   34] humidity:     37.11%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [56, 56, 56] | Mic[0..2]: [1634, 1617, 1618]
+  ............................................................
+[PACKET 002] Valid Alignment at File Offset: 49266 to 73899 bytes
+  ├── [Offset   26] sequence:      652
+  ├── [Offset   50] timestamp_ms:  688376 ms
+  ├── [Offset    4] battery_pct:  40.92%
+  ├── [Offset   30] temperature:  41.15 °C
+  ├── [Offset   34] humidity:     37.07%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [51, 51, 51] | Mic[0..2]: [1631, 1631, 1610]
+  ............................................................
+[PACKET 003] Valid Alignment at File Offset: 73899 to 98532 bytes
+  ├── [Offset   26] sequence:      653
+  ├── [Offset   50] timestamp_ms:  689376 ms
+  ├── [Offset    4] battery_pct:  41.14%
+  ├── [Offset   30] temperature:  41.13 °C
+  ├── [Offset   34] humidity:     37.08%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [52, 52, 52] | Mic[0..2]: [1631, 1604, 1602]
+  ............................................................
+[PACKET 004] Valid Alignment at File Offset: 98532 to 123165 bytes
+  ├── [Offset   26] sequence:      654
+  ├── [Offset   50] timestamp_ms:  690376 ms
+  ├── [Offset    4] battery_pct:  41.09%
+  ├── [Offset   30] temperature:  41.15 °C
+  ├── [Offset   34] humidity:     37.13%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [55, 50, 50] | Mic[0..2]: [1657, 1635, 1646]
+  ............................................................
+[PACKET 005] Valid Alignment at File Offset: 123165 to 147798 bytes
+  ├── [Offset   26] sequence:      655
+  ├── [Offset   50] timestamp_ms:  691376 ms
+  ├── [Offset    4] battery_pct:  40.98%
+  ├── [Offset   30] temperature:  41.17 °C
+  ├── [Offset   34] humidity:     37.17%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [56, 56, 56] | Mic[0..2]: [1668, 1657, 1656]
+  ............................................................
+[⚠️ CORRUPTION DETECTED] Lost sync at offset 147798.
+  Scanning byte-by-byte for next valid sequence frame...
+  [✅ RECOVERED] Skipped 20707 broken bytes. Found valid packet at offset 168505 (Seq: 657).
+  ............................................................
+[PACKET 006] Valid Alignment at File Offset: 168505 to 193138 bytes
+  ├── [Offset   26] sequence:      657
+  ├── [Offset   50] timestamp_ms:  693376 ms
+  ├── [Offset    4] battery_pct:  41.00%
+  ├── [Offset   30] temperature:  41.10 °C
+  ├── [Offset   34] humidity:     37.10%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [50, 50, 50] | Mic[0..2]: [1635, 1656, 1654]
+  ............................................................
+[PACKET 007] Valid Alignment at File Offset: 193138 to 217771 bytes
+  ├── [Offset   26] sequence:      658
+  ├── [Offset   50] timestamp_ms:  694376 ms
+  ├── [Offset    4] battery_pct:  40.98%
+  ├── [Offset   30] temperature:  41.12 °C
+  ├── [Offset   34] humidity:     37.17%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [49, 53, 53] | Mic[0..2]: [1630, 1647, 1665]
+  ............................................................
+[PACKET 008] Valid Alignment at File Offset: 217771 to 242404 bytes
+  ├── [Offset   26] sequence:      659
+  ├── [Offset   50] timestamp_ms:  695376 ms
+  ├── [Offset    4] battery_pct:  41.03%
+  ├── [Offset   30] temperature:  41.13 °C
+  ├── [Offset   34] humidity:     37.11%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [52, 52, 52] | Mic[0..2]: [1683, 1668, 1672]
+  ............................................................
+[PACKET 009] Valid Alignment at File Offset: 242404 to 267037 bytes
+  ├── [Offset   26] sequence:      660
+  ├── [Offset   50] timestamp_ms:  696376 ms
+  ├── [Offset    4] battery_pct:  40.92%
+  ├── [Offset   30] temperature:  41.16 °C
+  ├── [Offset   34] humidity:     37.07%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [51, 51, 51] | Mic[0..2]: [1640, 1679, 1680]
+  ............................................................
+[PACKET 010] Valid Alignment at File Offset: 267037 to 291670 bytes
+  ├── [Offset   26] sequence:      661
+  ├── [Offset   50] timestamp_ms:  697376 ms
+  ├── [Offset    4] battery_pct:  40.84%
+  ├── [Offset   30] temperature:  41.21 °C
+  ├── [Offset   34] humidity:     37.05%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [53, 53, 53] | Mic[0..2]: [1647, 1659, 1664]
+  ............................................................
+[PACKET 011] Valid Alignment at File Offset: 291670 to 316303 bytes
+  ├── [Offset   26] sequence:      662
+  ├── [Offset   50] timestamp_ms:  698376 ms
+  ├── [Offset    4] battery_pct:  40.35%
+  ├── [Offset   30] temperature:  41.17 °C
+  ├── [Offset   34] humidity:     37.10%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [48, 48, 51] | Mic[0..2]: [1633, 1654, 1617]
+  ............................................................
+[PACKET 012] Valid Alignment at File Offset: 316303 to 340936 bytes
+  ├── [Offset   26] sequence:      663
+  ├── [Offset   50] timestamp_ms:  699376 ms
+  ├── [Offset    4] battery_pct:  41.09%
+  ├── [Offset   30] temperature:  41.16 °C
+  ├── [Offset   34] humidity:     37.08%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [59, 59, 59] | Mic[0..2]: [1591, 1606, 1605]
+  ............................................................
+[PACKET 013] Valid Alignment at File Offset: 340936 to 365569 bytes
+  ├── [Offset   26] sequence:      664
+  ├── [Offset   50] timestamp_ms:  700376 ms
+  ├── [Offset    4] battery_pct:  41.00%
+  ├── [Offset   30] temperature:  41.17 °C
+  ├── [Offset   34] humidity:     37.12%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [57, 57, 57] | Mic[0..2]: [1591, 1593, 1609]
+  ............................................................
+[PACKET 014] Valid Alignment at File Offset: 365569 to 390202 bytes
+  ├── [Offset   26] sequence:      665
+  ├── [Offset   50] timestamp_ms:  701376 ms
+  ├── [Offset    4] battery_pct:  40.98%
+  ├── [Offset   30] temperature:  41.15 °C
+  ├── [Offset   34] humidity:     37.11%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [50, 50, 50] | Mic[0..2]: [1592, 1592, 1613]
+  ............................................................
+[PACKET 015] Valid Alignment at File Offset: 390202 to 414835 bytes
+  ├── [Offset   26] sequence:      666
+  ├── [Offset   50] timestamp_ms:  702376 ms
+  ├── [Offset    4] battery_pct:  40.10%
+  ├── [Offset   30] temperature:  41.12 °C
+  ├── [Offset   34] humidity:     37.10%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [54, 54, 54] | Mic[0..2]: [1591, 1591, 1596]
+  ............................................................
+[PACKET 016] Valid Alignment at File Offset: 414835 to 439468 bytes
+  ├── [Offset   26] sequence:      667
+  ├── [Offset   50] timestamp_ms:  703376 ms
+  ├── [Offset    4] battery_pct:  40.95%
+  ├── [Offset   30] temperature:  41.18 °C
+  ├── [Offset   34] humidity:     37.04%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [45, 45, 45] | Mic[0..2]: [1572, 1592, 1598]
+  ............................................................
+[PACKET 017] Valid Alignment at File Offset: 439468 to 464101 bytes
+  ├── [Offset   26] sequence:      668
+  ├── [Offset   50] timestamp_ms:  704376 ms
+  ├── [Offset    4] battery_pct:  40.98%
+  ├── [Offset   30] temperature:  41.23 °C
+  ├── [Offset   34] humidity:     37.12%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [48, 48, 48] | Mic[0..2]: [1584, 1581, 1591]
+  ............................................................
+[PACKET 018] Valid Alignment at File Offset: 464101 to 488734 bytes
+  ├── [Offset   26] sequence:      669
+  ├── [Offset   50] timestamp_ms:  705376 ms
+  ├── [Offset    4] battery_pct:  40.87%
+  ├── [Offset   30] temperature:  41.23 °C
+  ├── [Offset   34] humidity:     37.11%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [48, 48, 48] | Mic[0..2]: [1578, 1570, 1568]
+  ............................................................
+[PACKET 019] Valid Alignment at File Offset: 488734 to 513367 bytes
+  ├── [Offset   26] sequence:      670
+  ├── [Offset   50] timestamp_ms:  706376 ms
+  ├── [Offset    4] battery_pct:  41.03%
+  ├── [Offset   30] temperature:  41.27 °C
+  ├── [Offset   34] humidity:     37.10%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [55, 55, 55] | Mic[0..2]: [1581, 1589, 1578]
+  ............................................................
+[PACKET 020] Valid Alignment at File Offset: 513367 to 538000 bytes
+  ├── [Offset   26] sequence:      671
+  ├── [Offset   50] timestamp_ms:  707376 ms
+  ├── [Offset    4] battery_pct:  41.09%
+  ├── [Offset   30] temperature:  41.23 °C
+  ├── [Offset   34] humidity:     37.16%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [52, 52, 52] | Mic[0..2]: [1594, 1589, 1583]
+  ............................................................
+[PACKET 021] Valid Alignment at File Offset: 538000 to 562633 bytes
+  ├── [Offset   26] sequence:      672
+  ├── [Offset   50] timestamp_ms:  708376 ms
+  ├── [Offset    4] battery_pct:  40.90%
+  ├── [Offset   30] temperature:  41.23 °C
+  ├── [Offset   34] humidity:     37.11%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [55, 55, 55] | Mic[0..2]: [1583, 1570, 1570]
+  ............................................................
+[PACKET 022] Valid Alignment at File Offset: 562633 to 587266 bytes
+  ├── [Offset   26] sequence:      673
+  ├── [Offset   50] timestamp_ms:  709376 ms
+  ├── [Offset    4] battery_pct:  41.00%
+  ├── [Offset   30] temperature:  41.21 °C
+  ├── [Offset   34] humidity:     37.04%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [48, 48, 48] | Mic[0..2]: [1578, 1585, 1564]
+  ............................................................
+[PACKET 023] Valid Alignment at File Offset: 587266 to 611899 bytes
+  ├── [Offset   26] sequence:      674
+  ├── [Offset   50] timestamp_ms:  710376 ms
+  ├── [Offset    4] battery_pct:  40.87%
+  ├── [Offset   30] temperature:  41.48 °C
+  ├── [Offset   34] humidity:     37.04%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [54, 54, 54] | Mic[0..2]: [1585, 1606, 1541]
+  ............................................................
+[PACKET 024] Valid Alignment at File Offset: 611899 to 636532 bytes
+  ├── [Offset   26] sequence:      675
+  ├── [Offset   50] timestamp_ms:  711376 ms
+  ├── [Offset    4] battery_pct:  41.00%
+  ├── [Offset   30] temperature:  41.22 °C
+  ├── [Offset   34] humidity:     37.05%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [54, 54, 54] | Mic[0..2]: [1593, 1583, 1590]
+  ............................................................
+[PACKET 025] Valid Alignment at File Offset: 636532 to 661165 bytes
+  ├── [Offset   26] sequence:      676
+  ├── [Offset   50] timestamp_ms:  712376 ms
+  ├── [Offset    4] battery_pct:  40.79%
+  ├── [Offset   30] temperature:  41.27 °C
+  ├── [Offset   34] humidity:     36.98%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [52, 52, 52] | Mic[0..2]: [1569, 1593, 1562]
+  ............................................................
+[PACKET 026] Valid Alignment at File Offset: 661165 to 685798 bytes
+  ├── [Offset   26] sequence:      677
+  ├── [Offset   50] timestamp_ms:  713376 ms
+  ├── [Offset    4] battery_pct:  40.87%
+  ├── [Offset   30] temperature:  41.26 °C
+  ├── [Offset   34] humidity:     37.06%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [48, 48, 48] | Mic[0..2]: [1592, 1595, 1588]
+  ............................................................
+[PACKET 027] Valid Alignment at File Offset: 685798 to 710431 bytes
+  ├── [Offset   26] sequence:      678
+  ├── [Offset   50] timestamp_ms:  714376 ms
+  ├── [Offset    4] battery_pct:  40.95%
+  ├── [Offset   30] temperature:  41.22 °C
+  ├── [Offset   34] humidity:     36.98%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [53, 53, 49] | Mic[0..2]: [1569, 1575, 1572]
+  ............................................................
+[PACKET 028] Valid Alignment at File Offset: 710431 to 735064 bytes
+  ├── [Offset   26] sequence:      679
+  ├── [Offset   50] timestamp_ms:  715376 ms
+  ├── [Offset    4] battery_pct:  40.10%
+  ├── [Offset   30] temperature:  41.19 °C
+  ├── [Offset   34] humidity:     37.06%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [50, 50, 50] | Mic[0..2]: [1602, 1601, 1590]
+  ............................................................
+[PACKET 029] Valid Alignment at File Offset: 735064 to 759697 bytes
+  ├── [Offset   26] sequence:      680
+  ├── [Offset   50] timestamp_ms:  716376 ms
+  ├── [Offset    4] battery_pct:  40.95%
+  ├── [Offset   30] temperature:  41.27 °C
+  ├── [Offset   34] humidity:     36.97%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [49, 49, 49] | Mic[0..2]: [1609, 1610, 1614]
+  ............................................................
+[PACKET 030] Valid Alignment at File Offset: 759697 to 784330 bytes
+  ├── [Offset   26] sequence:      681
+  ├── [Offset   50] timestamp_ms:  717376 ms
+  ├── [Offset    4] battery_pct:  40.81%
+  ├── [Offset   30] temperature:  41.26 °C
+  ├── [Offset   34] humidity:     37.02%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [58, 58, 58] | Mic[0..2]: [1642, 1618, 1624]
+  ............................................................
+[PACKET 031] Valid Alignment at File Offset: 784330 to 808963 bytes
+  ├── [Offset   26] sequence:      682
+  ├── [Offset   50] timestamp_ms:  718376 ms
+  ├── [Offset    4] battery_pct:  40.95%
+  ├── [Offset   30] temperature:  41.18 °C
+  ├── [Offset   34] humidity:     37.03%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [50, 50, 50] | Mic[0..2]: [1596, 1618, 1594]
+  ............................................................
+[PACKET 032] Valid Alignment at File Offset: 808963 to 833596 bytes
+  ├── [Offset   26] sequence:      683
+  ├── [Offset   50] timestamp_ms:  719376 ms
+  ├── [Offset    4] battery_pct:  40.98%
+  ├── [Offset   30] temperature:  41.15 °C
+  ├── [Offset   34] humidity:     36.99%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [49, 49, 49] | Mic[0..2]: [1609, 1613, 1591]
+  ............................................................
+[PACKET 033] Valid Alignment at File Offset: 833596 to 858229 bytes
+  ├── [Offset   26] sequence:      684
+  ├── [Offset   50] timestamp_ms:  720376 ms
+  ├── [Offset    4] battery_pct:  40.98%
+  ├── [Offset   30] temperature:  41.22 °C
+  ├── [Offset   34] humidity:     37.00%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [39, 39, 39] | Mic[0..2]: [1620, 1619, 1619]
+  ............................................................
+[PACKET 034] Valid Alignment at File Offset: 858229 to 882862 bytes
+  ├── [Offset   26] sequence:      685
+  ├── [Offset   50] timestamp_ms:  721376 ms
+  ├── [Offset    4] battery_pct:  40.95%
+  ├── [Offset   30] temperature:  41.14 °C
+  ├── [Offset   34] humidity:     37.04%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [50, 50, 50] | Mic[0..2]: [1631, 1635, 1630]
+  ............................................................
+[PACKET 035] Valid Alignment at File Offset: 882862 to 907495 bytes
+  ├── [Offset   26] sequence:      686
+  ├── [Offset   50] timestamp_ms:  722376 ms
+  ├── [Offset    4] battery_pct:  41.00%
+  ├── [Offset   30] temperature:  41.15 °C
+  ├── [Offset   34] humidity:     37.11%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [49, 49, 49] | Mic[0..2]: [1672, 1653, 1647]
+  ............................................................
+[PACKET 036] Valid Alignment at File Offset: 907495 to 932128 bytes
+  ├── [Offset   26] sequence:      687
+  ├── [Offset   50] timestamp_ms:  723376 ms
+  ├── [Offset    4] battery_pct:  41.03%
+  ├── [Offset   30] temperature:  41.13 °C
+  ├── [Offset   34] humidity:     37.15%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [55, 55, 49] | Mic[0..2]: [1656, 1631, 1627]
+  ............................................................
+[PACKET 037] Valid Alignment at File Offset: 932128 to 956761 bytes
+  ├── [Offset   26] sequence:      688
+  ├── [Offset   50] timestamp_ms:  724376 ms
+  ├── [Offset    4] battery_pct:  40.65%
+  ├── [Offset   30] temperature:  41.07 °C
+  ├── [Offset   34] humidity:     37.18%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [55, 55, 55] | Mic[0..2]: [1636, 1662, 1655]
+  ............................................................
+[PACKET 038] Valid Alignment at File Offset: 956761 to 981394 bytes
+  ├── [Offset   26] sequence:      689
+  ├── [Offset   50] timestamp_ms:  725376 ms
+  ├── [Offset    4] battery_pct:  40.76%
+  ├── [Offset   30] temperature:  41.12 °C
+  ├── [Offset   34] humidity:     37.25%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [53, 53, 53] | Mic[0..2]: [1662, 1641, 1628]
+  ............................................................
+[PACKET 039] Valid Alignment at File Offset: 981394 to 1006027 bytes
+  ├── [Offset   26] sequence:      690
+  ├── [Offset   50] timestamp_ms:  726376 ms
+  ├── [Offset    4] battery_pct:  40.73%
+  ├── [Offset   30] temperature:  41.10 °C
+  ├── [Offset   34] humidity:     37.29%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [56, 56, 56] | Mic[0..2]: [1646, 1636, 1636]
+  ............................................................
+[PACKET 040] Valid Alignment at File Offset: 1006027 to 1030660 bytes
+  ├── [Offset   26] sequence:      691
+  ├── [Offset   50] timestamp_ms:  727376 ms
+  ├── [Offset    4] battery_pct:  40.87%
+  ├── [Offset   30] temperature:  41.09 °C
+  ├── [Offset   34] humidity:     37.28%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [53, 53, 53] | Mic[0..2]: [1672, 1662, 1659]
+  ............................................................
+[PACKET 041] Valid Alignment at File Offset: 1030660 to 1055293 bytes
+  ├── [Offset   26] sequence:      692
+  ├── [Offset   50] timestamp_ms:  728376 ms
+  ├── [Offset    4] battery_pct:  40.87%
+  ├── [Offset   30] temperature:  41.13 °C
+  ├── [Offset   34] humidity:     37.34%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [60, 60, 60] | Mic[0..2]: [1636, 1667, 1656]
+  ............................................................
+[PACKET 042] Valid Alignment at File Offset: 1055293 to 1079926 bytes
+  ├── [Offset   26] sequence:      693
+  ├── [Offset   50] timestamp_ms:  729376 ms
+  ├── [Offset    4] battery_pct:  40.70%
+  ├── [Offset   30] temperature:  41.12 °C
+  ├── [Offset   34] humidity:     37.39%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [50, 50, 50] | Mic[0..2]: [1659, 1655, 1635]
+  ............................................................
+[PACKET 043] Valid Alignment at File Offset: 1079926 to 1104559 bytes
+  ├── [Offset   26] sequence:      694
+  ├── [Offset   50] timestamp_ms:  730376 ms
+  ├── [Offset    4] battery_pct:  40.65%
+  ├── [Offset   30] temperature:  41.15 °C
+  ├── [Offset   34] humidity:     37.32%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [52, 52, 52] | Mic[0..2]: [1628, 1647, 1656]
+  ............................................................
+[PACKET 044] Valid Alignment at File Offset: 1104559 to 1129192 bytes
+  ├── [Offset   26] sequence:      695
+  ├── [Offset   50] timestamp_ms:  731376 ms
+  ├── [Offset    4] battery_pct:  40.65%
+  ├── [Offset   30] temperature:  41.13 °C
+  ├── [Offset   34] humidity:     37.36%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [57, 57, 57] | Mic[0..2]: [1669, 1670, 1665]
+  ............................................................
+[PACKET 045] Valid Alignment at File Offset: 1129192 to 1153825 bytes
+  ├── [Offset   26] sequence:      696
+  ├── [Offset   50] timestamp_ms:  732376 ms
+  ├── [Offset    4] battery_pct:  39.83%
+  ├── [Offset   30] temperature:  41.15 °C
+  ├── [Offset   34] humidity:     37.46%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [44, 52, 52] | Mic[0..2]: [1664, 1672, 1654]
+  ............................................................
+[PACKET 046] Valid Alignment at File Offset: 1153825 to 1178458 bytes
+  ├── [Offset   26] sequence:      697
+  ├── [Offset   50] timestamp_ms:  733376 ms
+  ├── [Offset    4] battery_pct:  40.68%
+  ├── [Offset   30] temperature:  41.12 °C
+  ├── [Offset   34] humidity:     37.39%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [50, 50, 50] | Mic[0..2]: [1672, 1683, 1680]
+  ............................................................
+[PACKET 047] Valid Alignment at File Offset: 1178458 to 1203091 bytes
+  ├── [Offset   26] sequence:      698
+  ├── [Offset   50] timestamp_ms:  734376 ms
+  ├── [Offset    4] battery_pct:  40.68%
+  ├── [Offset   30] temperature:  41.16 °C
+  ├── [Offset   34] humidity:     37.34%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [55, 55, 55] | Mic[0..2]: [1641, 1636, 1656]
+  ............................................................
+[PACKET 048] Valid Alignment at File Offset: 1203091 to 1227724 bytes
+  ├── [Offset   26] sequence:      699
+  ├── [Offset   50] timestamp_ms:  735376 ms
+  ├── [Offset    4] battery_pct:  40.81%
+  ├── [Offset   30] temperature:  41.15 °C
+  ├── [Offset   34] humidity:     37.22%
+  ├── [Offset   57] Accel Arrays:  Starts here (2000 samples x 3 axes)
+  ├── [Offset 12057] Mic Array:    Starts here (2000 samples)
+  ├── [Offset 16057] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 24249] IR Frame:     Starts here (192 samples)
+  🔬 Array Peek -> AccelX[0..2]: [49, 49, 49] | Mic[0..2]: [1631, 1646, 1664]
+  ............................................................

@@ -158,7 +158,7 @@ class MiniPlotWidget(QWidget):
 
 class DataLoaderThread(QThread):
     progress = pyqtSignal(int)
-    finished_data = pyqtSignal(list, list, dict)
+    finished_data = pyqtSignal(list, list, dict, str)
     error = pyqtSignal(str)
 
     def __init__(self, folder_path):
@@ -198,16 +198,65 @@ class DataLoaderThread(QThread):
                 'microphoneSamples': []
             }
             
+            total_expected = 0
+            total_extracted = 0
+            total_skipped_bytes = 0
+            per_file_stats = []
+            
+            PACKET_SIZE = combined_packet_dtype.itemsize
             total_files = len(bin_files)
             for i, bin_file in enumerate(bin_files):
                 full_path = os.path.join(self.folder_path, bin_file)
-                data = np.fromfile(full_path, dtype=combined_packet_dtype)
                 
-                # Cleanly extract all individual fields into their own separated arrays
-                for key in sensor_data.keys():
-                    sensor_data[key].append(data[key])
+                file_size = os.path.getsize(full_path)
+                # Round up to account for partial/corrupted packets correctly
+                expected = (file_size + PACKET_SIZE - 1) // PACKET_SIZE
+                total_expected += expected
+                file_extracted = 0
+                skipped_in_file = 0
                 
-                for packet in data:
+                with open(full_path, 'rb') as f:
+                    file_bytes = f.read()
+                    
+                pointer = 0
+                while pointer <= (len(file_bytes) - PACKET_SIZE):
+                    packet_bytes = file_bytes[pointer:pointer + PACKET_SIZE]
+                    packet_array = np.frombuffer(packet_bytes, dtype=combined_packet_dtype)
+                    packet = packet_array[0]
+                    
+                    # Sanity Checks
+                    bat = packet['batteryPercentage']
+                    temp = packet['temperature']
+                    sample_count = packet['accelSampleCount']
+                    
+                    is_valid = True
+                    if sample_count != 2000: is_valid = False
+                    if not (0.0 <= bat <= 100.0): is_valid = False
+                    if not (-40.0 <= temp <= 125.0): is_valid = False
+
+                    if not is_valid:
+                        recovered = False
+                        for scan_ptr in range(pointer + 1, len(file_bytes) - PACKET_SIZE):
+                            if file_bytes[scan_ptr+55] == 0xD0 and file_bytes[scan_ptr+56] == 0x07:
+                                t_packet = np.frombuffer(file_bytes[scan_ptr:scan_ptr+PACKET_SIZE], dtype=combined_packet_dtype)[0]
+                                if (0.0 <= t_packet['batteryPercentage'] <= 100.0) and (-40.0 <= t_packet['temperature'] <= 125.0):
+                                    skipped_in_file += (scan_ptr - pointer)
+                                    pointer = scan_ptr
+                                    recovered = True
+                                    break
+                        
+                        if not recovered:
+                            skipped_in_file += (len(file_bytes) - pointer)
+                            break
+                        continue
+                    
+                    file_extracted += 1
+                    total_extracted += 1
+                    
+                    # Cleanly extract all individual fields into their own separated arrays
+                    for key in sensor_data.keys():
+                        sensor_data[key].append(packet_array[key])
+                    
                     # Process RGB Frame
                     rgb_raw = packet['rgbFrame'].view(np.uint8).reshape((64, 64, 2))
                     img_bgr = cv2.cvtColor(rgb_raw, cv2.COLOR_BGR5652BGR)
@@ -228,8 +277,23 @@ class DataLoaderThread(QThread):
                     qimg_ir = QImage(heatmap_rgb.tobytes(), 16, 12, 3 * 16, QImage.Format_RGB888).copy()
                     ir_frames.append(qimg_ir)
                     
+                    pointer += PACKET_SIZE
+                
+                if pointer < len(file_bytes):
+                    skipped_in_file += (len(file_bytes) - pointer)
+                
+                total_skipped_bytes += skipped_in_file
+                
+                if file_extracted < expected or skipped_in_file > 0:
+                    per_file_stats.append(f"{bin_file} (Extracted: {file_extracted}/{expected}, Skipped: {skipped_in_file} bytes)")
                 
                 self.progress.emit(int(((i + 1) / total_files) * 100))
+
+            stats_msg = f"Extraction Complete.\nTotal Expected: {total_expected}\nTotal Extracted: {total_extracted}\nTotal Skipped: {total_skipped_bytes} bytes\n"
+            if per_file_stats:
+                stats_msg += "\nFiles with missing data:\n" + "\n".join(per_file_stats)
+            else:
+                stats_msg += "\nAll files have expected data!"
 
             # Concatenate all lists of arrays into cleanly separated flat/2D numpy arrays
             for key in sensor_data.keys():
@@ -238,7 +302,7 @@ class DataLoaderThread(QThread):
                 else:
                     sensor_data[key] = np.array([])
 
-            self.finished_data.emit(rgb_frames, ir_frames, sensor_data)
+            self.finished_data.emit(rgb_frames, ir_frames, sensor_data, stats_msg)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -407,7 +471,7 @@ class StoredDataScreen(QWidget):
         self.loader.error.connect(self.on_load_error)
         self.loader.start()
 
-    def on_data_loaded(self, rgb, ir, sensor_data):
+    def on_data_loaded(self, rgb, ir, sensor_data, stats_msg):
         self.progress_bar.setVisible(False)
         self.btn_select_folder.setEnabled(True)
         self.rgb_frames = rgb
@@ -434,6 +498,8 @@ class StoredDataScreen(QWidget):
             self.btn_play.setEnabled(True)
             self.btn_plot.setEnabled(True)
             self.update_frames(0)
+            
+        QMessageBox.information(self, "Data Load Summary", stats_msg)
 
     def on_load_error(self, err):
         self.progress_bar.setVisible(False)
