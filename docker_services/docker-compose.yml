@@ -4,9 +4,9 @@ services:
       context: ./http_handler_service
     container_name: esp_data_receiver
     ports:
-      - "8080:8080"
+      - "8000:8000"
     environment:
-      - SERVER_PORT=8080
+      - SERVER_PORT=8000
       - DATA_DIR=/app/received_sessions
     volumes:
       # Maps a folder on your server host to the container's data folder
