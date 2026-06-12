@@ -1,3 +1,4 @@
 __pycache__/
 *.pyc
 srv_bin_data/
+docker_services/deneme_data/
