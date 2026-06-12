@@ -542,17 +542,20 @@ class StoredDataScreen(QWidget):
                 arr = np.array(ptr).reshape((img.height(), img.width(), 3))
                 
             gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
-            gray_blurred = cv2.GaussianBlur(gray, (5, 5), 0)
             
+            gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+            gray_blurred = cv2.GaussianBlur(gray_filtered, (7, 7), 1.5)
+            
+            # Enhanced circle detection with better parameters
             circles = cv2.HoughCircles(
                 gray_blurred, 
                 cv2.HOUGH_GRADIENT, 
-                dp=1.2, 
-                minDist=20,
-                param1=100, 
-                param2=35, 
-                minRadius=5, 
-                maxRadius=30
+                dp=1.0, 
+                minDist=30,
+                param1=70, 
+                param2=20, 
+                minRadius=8, 
+                maxRadius=50
             )
             
             if circles is not None:
@@ -561,11 +564,12 @@ class StoredDataScreen(QWidget):
                 painter.setPen(QPen(QColor(255, 0, 0), 2))
                 scale_x = 384 / img.width()
                 scale_y = 384 / img.height()
-                for i in circles[0, :]:
-                    center_x = int(i[0] * scale_x)
-                    center_y = int(i[1] * scale_y)
-                    radius = int(i[2] * scale_x)
-                    painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
+                # Select the most prominent circle (highest accumulator value)
+                best_circle = circles[0, np.argmax(circles[0, :, 2])]
+                center_x = int(best_circle[0] * scale_x)
+                center_y = int(best_circle[1] * scale_y)
+                radius = int(best_circle[2] * scale_x)
+                painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
                 painter.end()
 
             self.rgb_view.setPixmap(rgb_pix)
