@@ -312,6 +312,8 @@ class StoredDataScreen(QWidget):
         super().__init__()
         self.rgb_frames = []
         self.ir_frames = []
+        self.rgb_gray_frames = []
+        self.ir_gray_frames = []
         self.sensor_data = {}
         self.audio_data = None
         self.current_frame = 0
@@ -357,9 +359,18 @@ class StoredDataScreen(QWidget):
         rgb_lbl = QLabel("RGB Camera Video")
         rgb_lbl.setAlignment(Qt.AlignCenter)
         self.rgb_view = QLabel()
-        self.rgb_view.setFixedSize(384, 384)  
+        self.rgb_view.setFixedSize(256, 256)  
         self.rgb_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
         self.rgb_view.setAlignment(Qt.AlignCenter)
+        
+        # RGB gray Square
+        rgb_gray_vbox = QVBoxLayout()
+        rgb_gray_lbl = QLabel("gray Camera Video")
+        rgb_gray_lbl.setAlignment(Qt.AlignCenter)
+        self.rgb_gray_view = QLabel()
+        self.rgb_gray_view.setFixedSize(256, 256)  
+        self.rgb_gray_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
+        self.rgb_gray_view.setAlignment(Qt.AlignCenter)
         
         # Center Color Detection UI (Vertical layout for the left side)
         color_vbox = QVBoxLayout()
@@ -376,24 +387,38 @@ class StoredDataScreen(QWidget):
         
         rgb_vbox.addWidget(rgb_lbl)
         rgb_vbox.addWidget(self.rgb_view)
-        
+        rgb_gray_vbox.addWidget(rgb_gray_lbl)
+        rgb_gray_vbox.addWidget(self.rgb_gray_view)
         # IR Square
         ir_vbox = QVBoxLayout()
         ir_lbl = QLabel("Thermal IR Video")
         ir_lbl.setAlignment(Qt.AlignCenter)
         self.ir_view = QLabel()
-        self.ir_view.setFixedSize(384, 384)
+        self.ir_view.setFixedSize(256, 256)
         self.ir_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
         self.ir_view.setAlignment(Qt.AlignCenter)
         ir_vbox.addWidget(ir_lbl)
         ir_vbox.addWidget(self.ir_view)
         
+        # IR gray Square
+        ir_gray_vbox = QVBoxLayout()
+        ir_gray_lbl = QLabel("gray IR Video")
+        ir_gray_lbl.setAlignment(Qt.AlignCenter)
+        self.ir_gray_view = QLabel()
+        self.ir_gray_view.setFixedSize(256, 256)
+        self.ir_gray_view.setStyleSheet("background-color: black; border: 2px solid #30363d; border-radius: 8px;")
+        self.ir_gray_view.setAlignment(Qt.AlignCenter)
+        ir_gray_vbox.addWidget(ir_gray_lbl)
+        ir_gray_vbox.addWidget(self.ir_gray_view)
+        
         video_layout.addStretch()
         video_layout.addLayout(color_vbox)
         video_layout.addSpacing(15)
         video_layout.addLayout(rgb_vbox)
+        video_layout.addLayout(rgb_gray_vbox)
         video_layout.addSpacing(40)
         video_layout.addLayout(ir_vbox)
+        video_layout.addLayout(ir_gray_vbox)
         video_layout.addStretch()
         layout.addLayout(video_layout)
         
@@ -516,7 +541,7 @@ class StoredDataScreen(QWidget):
         
         if 0 <= index < len(self.rgb_frames):
             img = self.rgb_frames[index]
-            rgb_pix = QPixmap.fromImage(img).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            rgb_pix = QPixmap.fromImage(img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             
             # --- Calculate average color for center 16x16 ---
             r_sum = g_sum = b_sum = 0
@@ -546,6 +571,17 @@ class StoredDataScreen(QWidget):
             gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75)
             gray_blurred = cv2.GaussianBlur(gray_filtered, (7, 7), 1.5)
             
+            self.rgb_view.setPixmap(rgb_pix)
+
+            ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            self.ir_view.setPixmap(ir_pix)
+
+            #get dimensions of the grayscale image
+            h, w = gray.shape
+            # 2. Convert NumPy array to QImage 
+            q_img = QImage(gray.data, w, h, w, QImage.Format_Grayscale8).copy()
+            # 3. Convert QImage to QPixmap
+            rgb_gray_pixmap = QPixmap.fromImage(q_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             # Enhanced circle detection with better parameters
             circles = cv2.HoughCircles(
                 gray_blurred, 
@@ -557,13 +593,12 @@ class StoredDataScreen(QWidget):
                 minRadius=8, 
                 maxRadius=50
             )
-            
             if circles is not None:
                 circles = np.uint16(np.around(circles))
-                painter = QPainter(rgb_pix)
+                painter = QPainter(rgb_gray_pixmap)
                 painter.setPen(QPen(QColor(255, 0, 0), 2))
-                scale_x = 384 / img.width()
-                scale_y = 384 / img.height()
+                scale_x = 256 / img.width()
+                scale_y = 256 / img.height()
                 # Select the most prominent circle (highest accumulator value)
                 best_circle = circles[0, np.argmax(circles[0, :, 2])]
                 center_x = int(best_circle[0] * scale_x)
@@ -571,11 +606,7 @@ class StoredDataScreen(QWidget):
                 radius = int(best_circle[2] * scale_x)
                 painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
                 painter.end()
-
-            self.rgb_view.setPixmap(rgb_pix)
-
-            ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(384, 384, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-            self.ir_view.setPixmap(ir_pix)
+            self.rgb_gray_view.setPixmap(rgb_gray_pixmap)
 
         # Tell the plots to draw the marker line at the current timeline index
         for plot_widget in self.mini_plots.values():
