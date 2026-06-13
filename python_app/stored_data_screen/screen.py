@@ -541,8 +541,9 @@ class StoredDataScreen(QWidget):
         
         if 0 <= index < len(self.rgb_frames):
             img = self.rgb_frames[index]
+            ir_img = self.ir_frames[index]
             rgb_pix = QPixmap.fromImage(img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-            
+            ir_pix = QPixmap.fromImage(ir_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             # --- Calculate average color for center 16x16 ---
             r_sum = g_sum = b_sum = 0
             # Center 16x16 in a 64x64 image is exactly from index 24 to 40
@@ -558,7 +559,11 @@ class StoredDataScreen(QWidget):
             self.lbl_rgb_avg_text.setText(f"Center\n16x16\n{hex_color.upper()}")
             self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
             
-            # --- Detect and draw circle ---
+            self.rgb_view.setPixmap(rgb_pix)
+            self.ir_view.setPixmap(ir_pix)
+            
+            # --- Detect and draw circle for rgb gray--- 
+            # later instead of below we can try to use q_img_gray = img.convertToFormat(QImage.Format_Grayscale8)
             ptr = img.constBits()
             ptr.setsize(img.byteCount())
             try:
@@ -567,21 +572,14 @@ class StoredDataScreen(QWidget):
                 arr = np.array(ptr).reshape((img.height(), img.width(), 3))
                 
             gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
-            
             gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75)
             gray_blurred = cv2.GaussianBlur(gray_filtered, (7, 7), 1.5)
-            
-            self.rgb_view.setPixmap(rgb_pix)
-
-            ir_pix = QPixmap.fromImage(self.ir_frames[index]).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-            self.ir_view.setPixmap(ir_pix)
-
             #get dimensions of the grayscale image
             h, w = gray.shape
-            # 2. Convert NumPy array to QImage 
-            q_img = QImage(gray.data, w, h, w, QImage.Format_Grayscale8).copy()
+             # 2. Convert NumPy array to QImage  //tobytes() copy .data use same location:)
+            rgb_gray_img = QImage(gray.tobytes(), w, h, w, QImage.Format_Grayscale8).copy()
             # 3. Convert QImage to QPixmap
-            rgb_gray_pixmap = QPixmap.fromImage(q_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            rgb_gray_pixmap = QPixmap.fromImage(rgb_gray_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             # Enhanced circle detection with better parameters
             circles = cv2.HoughCircles(
                 gray_blurred, 
@@ -606,7 +604,52 @@ class StoredDataScreen(QWidget):
                 radius = int(best_circle[2] * scale_x)
                 painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
                 painter.end()
+           
             self.rgb_gray_view.setPixmap(rgb_gray_pixmap)
+            
+            # --- Detect and draw circle for ir gray---
+            ptr = ir_img.constBits()
+            ptr.setsize(ir_img.byteCount())
+            try:
+                arr2 = np.array(ptr, copy=False).reshape((ir_img.height(), ir_img.width(), 3))
+            except TypeError:
+                arr2 = np.array(ptr).reshape((ir_img.height(), ir_img.width(), 3))
+                
+            gray2 = cv2.cvtColor(arr2, cv2.COLOR_RGB2GRAY)
+            gray_filtered2 = cv2.bilateralFilter(gray2, 9, 75, 75)
+            gray_blurred2 = cv2.GaussianBlur(gray_filtered2, (7, 7), 1.5)
+            #get dimensions of the grayscale image
+            h, w = gray2.shape
+             # 2. Convert NumPy array to QImage 
+            q_img2 = QImage(gray2.data, w, h, w, QImage.Format_Grayscale8).copy()
+            # 3. Convert QImage to QPixmap
+            ir_gray_pixmap = QPixmap.fromImage(q_img2).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            circles = cv2.HoughCircles(
+                gray_blurred2, 
+                cv2.HOUGH_GRADIENT, 
+                dp=1.0, 
+                minDist=30,
+                param1=70, 
+                param2=20, 
+                minRadius=8, 
+                maxRadius=50
+            )
+            if circles is not None:
+                circles = np.uint16(np.around(circles))
+                painter = QPainter(ir_gray_pixmap)
+                painter.setPen(QPen(QColor(255, 0, 0), 2))
+                scale_x = 256 / ir_img.width()
+                scale_y = 256 / ir_img.height()
+                # Select the most prominent circle (highest accumulator value)
+                best_circle = circles[0, np.argmax(circles[0, :, 2])]
+                center_x = int(best_circle[0] * scale_x)
+                center_y = int(best_circle[1] * scale_y)
+                radius = int(best_circle[2] * scale_x)
+                painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
+                painter.end()
+           
+            # Enhanced circle detection with better parameters
+            self.ir_gray_view.setPixmap(ir_gray_pixmap)
 
         # Tell the plots to draw the marker line at the current timeline index
         for plot_widget in self.mini_plots.values():
