@@ -1,57 +1,58 @@
-### Core Architecture Components
+# System Architecture & Implementation Blueprint: Asynchronous Binary IoT Ingestion Engine
 
-1. **API Gateway / Reverse Proxy (NGINX):** Act as the single entry point. It handles SSL termination, routes traffic matching `/api/v1/auth/*` to the User Service, and routes `/api/v1/telemetry/*` to the Ingestion Service. It can also enforce rate limiting to protect your backend from malfunctioning or malicious devices.
-2. **Ingestion Service:** A lightweight, high-performance API surface (written in **FastAPI** or **Go**). Its sole job is to validate incoming request headers, authenticate the device token, and instantly push the payload onto a message broker before returning an immediate `202 Accepted` response to the ESP32. This keeps the ESP32 connection window minimal, preserving its power and memory.
-3. **Message Broker (RabbitMQ):** Essential for absorbing non-periodic, bursts of daytime traffic. If 50 devices send 1MB data simultaneously, RabbitMQ queues the tasks safely so your backend doesn't crash from memory or CPU exhaustion.
-4. **Asynchronous Background Workers:** Independent consumer applications that pull tasks out of RabbitMQ queues at their own controlled pace:
-   * **Telemetry Worker:** Parses JSON data, separates numerical metrics, and writes them to a Time-Series Database.
-   * **Payload/Image Worker:** Strips the binary image array/base64 string, processes or compresses it if necessary, saves it to Object Storage, and stores the resulting URL path.
-5. **Notification / Alert Engine:** Evaluates data points against pre-defined thresholds (e.g., if a sensor reading exceeds a critical limit). It triggers alert pathways via WebSockets or push notification gateways.
+This document provides a comprehensive technical overview of the distributed IoT data ingestion platform designed to securely link embedded edge devices (**ESP32**) to end-user accounts, process large-scale asynchronous multi-modal binary payloads (1–4 MB containing synchronized sensor matrices and camera snapshots), and optimize system utilization via architectural segregation.
 
 ---
 
-## 2. Data Storage Strategy (Should I use a DB?)
+## 1. System Vision & Problem Statement
 
-**Yes, you absolutely need databases**, but a single traditional database is not ideal for handling mixed IoT workloads containing both metadata, high-volume time-series metrics, and large binary blobs (images). You should use a **hybrid storage strategy**:
+### 1.1 Objective
+To architect and implement a production-ready, highly horizontally scalable, and resource-efficient backend infrastructure capable of handling high-volume, asynchronous binary payload uploads from remote hardware devices. The system enforces strict user-to-device ownership boundaries, ensures low-latency responsive APIs for user interactions (Web Dashboard), and decouples network-heavy binary transport layers from business logic execution.
 
-### A. Relational Database (e.g., PostgreSQL)
-* **What it stores:** Structured operational data. User accounts, encrypted passwords, organization hierarchies, device inventory profiles, access tokens, and **Device-to-User bindings** (which device belongs to which customer).
-* **Why:** This data requires strict ACID compliance, complex relational querying, and strong consistency.
-
-### B. Time-Series Database (e.g., TimescaleDB or InfluxDB)
-* **What it stores:** Numerical, timestamped sensor readings (temperature, battery voltage, signal strength, status flags).
-* **Why:** Standard databases slow down significantly when they contain hundreds of millions of historical rows. Time-series databases automatically partition data by time segments, making queries like *"Give me the average battery level for device X between 2:00 PM and 4:00 PM today"* incredibly fast.
-* *Pro Tip:* **TimescaleDB** runs inside standard PostgreSQL as an extension, allowing you to have both relational and time-series data inside the same database server instance.
-
-### C. Object Storage (e.g., AWS S3, DigitalOcean Spaces, or self-hosted MinIO)
-* **What it stores:** Raw images, camera frames, and large binary log files.
-* **Why:** **Never store raw images directly inside a database as binary blobs (BLOBs).** It severely degrades database performance, bloats backups, and destroys cache efficiency. Instead, save the image as a file to Object Storage, obtain a distinct URL (e.g., `https://storage.local/device-01/frame-9482.jpg`), and save that string URL into your database record alongside the telemetry metadata.
+### 1.2 Core Architectural Constraints & Mitigation Strategies
+1. **Payload Density (1–4 MB):** Storing multi-megabyte binary data natively inside relational database tables (e.g., PostgreSQL `BYTEA` or `BLOB` configurations) induces severe database bloating, catastrophic RAM spikes during active query compilation, and limits horizontal scalability.
+   * *Mitigation:* Integrate an **S3-Compatible Object Storage Appliance** (MinIO for localized network topography / AWS S3 for elastic public infrastructure deployments) to process and persist unstructured blobs.
+2. **Synchronous Thread-Blocking Bottlenecks:** Standard microframework architectures operating synchronous single-threaded event loops (such as Python's native `HTTPServer`) suffer complete thread starvation when streaming megabytes of data over variable, low-throughput edge Wi-Fi connections. One uploading device drops availability for all peripheral nodes.
+   * *Mitigation:* Decouple the authentication layer from the data upload layer utilizing **Cryptographically Signed Presigned URLs**. The application server serves strictly as a microsecond metadata controller, shifting heavy, sustained network I/O payloads natively to the storage cluster.
+3. **Hardware Constraints of Edge Silicon (ESP32):** Microcontrollers possess limited RAM pools, restricted networking stacks, and high power overhead during continuous cryptographic handshakes (TLS negotiation).
+   * *Mitigation:* Optimize the firmware execution path by using a dual-state transport pipeline. Use ultra-lightweight REST operations for configuration/token requests and implement **HTTP Chunked Transfer Encoding** or pure stream pointers for object uploads, utilizing specialized hardware cryptographic engines on the ESP32 for public-facing deployments.
 
 ---
 
-## 3. User-Device Binding & Authentication
+## 2. Current Implementation Phase (Local LAN Blueprint)
 
-To make this a secure, commercial-grade platform, you must establish a secure identity link between devices, data payloads, and end-users.
+The initial implementation focuses on setting up an automated, sandboxed multi-container local area network (LAN) deployment utilizing **Docker Compose**. This environment bridges the ESP32 hardware device to the host infrastructure across an identical local network switch.
 
-┌────────────────────────────────────────────────────────────────────────┐
-│                        PostgreSQL Schema (Example)                      │
-├───────────────────────┐                        ├───────────────────────┤
-│      users Table      │                        │     devices Table     │
-├───────────────────────┤                        ├───────────────────────┤
-│ id (PK)               │◄─── (One-to-Many) ────►│ id (PK)               │
-│ email                 │                        │ device_uuid           │
-│ password_hash         │                        │ user_id (FK)          │
-│ created_at            │                        │ auth_token_hash       │
-└───────────────────────┘                        │ status ("active")     │
-└───────────────────────┘
+### 2.1 Multi-Container Service Topography (`docker-compose.yml`)
+The orchestration layer segregates the architecture into an edge API gateway container and an isolated, high-performance object storage server container:
 
+```yaml
+services:
+  esp-data-receiver:
+    build:
+      context: ./http_handler_service
+    container_name: esp_data_receiver
+    ports:
+      - "8000:8000"
+    environment:
+      - SERVER_PORT=8000
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password123
+    restart: unless-stopped
+    depends_on:
+      - minio
 
-### The Authentication Flow
-1. **Device Provisioning:** When an ESP32 is manufactured or deployed, it is assigned a globally unique ID (`device_uuid`) and a cryptographically secure random token (`device_secret`). This secret token is flashed directly into the ESP32 non-volatile memory (NVS).
-2. **The Payload Header:** When sending data, the ESP32 attaches its unique identifier and token to the HTTP Request headers:
-   ```http
-   POST /api/v1/telemetry/submit HTTP/1.1
-   Host: api.yourplatform.com
-   X-Device-UUID: 8f3b9c2a-e112-4d56-b789-f0123456789a
-   Authorization: Bearer d3b07384d113edec49eaa6238ad5ff00
-   Content-Type: application/json
+  minio:
+    image: minio/minio:latest
+    container_name: local_minio
+    ports:
+      - "9000:9000"  # S3 API Ingestion Endpoint
+      - "9001:9001"  # Administrative Web Console Management Dashboard
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password123
+    volumes:
+      - ./minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped

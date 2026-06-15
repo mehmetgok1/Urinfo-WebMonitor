@@ -1,15 +1,67 @@
+version: '3.8'
+
 services:
+  # Nginx acts as the single entry point Reverse Proxy
+  nginx-gateway:
+    image: nginx:alpine
+    container_name: nginx_gateway
+    ports:
+      - "80:80"  # Exposes ONLY port 80 to your local network
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - esp-data-receiver
+    restart: unless-stopped
+
   esp-data-receiver:
     build:
       context: ./http_handler_service
     container_name: esp_data_receiver
-    ports:
-      - "8000:8000"
     environment:
       - SERVER_PORT=8000
-      - DATA_DIR=/app/received_sessions
-    volumes:
-      # Maps a folder on your server host to the container's data folder
-      # Change "./srv_bin_data" to whatever folder path you prefer on the host
-      - ./srv_bin_data:/app/received_sessions
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password123
+      # --- PostgreSQL Connection Strings ---
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres_user
+      - DB_PASSWORD=secure_postgres_pass123
+      - DB_NAME=iot_ingestion_db
     restart: unless-stopped
+    depends_on:
+      - minio
+      - postgres  # Wait for DB container to launch before starting receiver
+
+  minio:
+    image: minio/minio:RELEASE.2024-03-07T00-43-48Z # Pinning a stable version is safer
+    container_name: local_minio
+    ports:
+      - "9000:9000"  # API Port
+      - "9001:9001"  # Console Dashboard Port
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password123
+    volumes:
+      - minio_storage:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine  # Lightweight, stable PostgreSQL production image
+    container_name: iot_postgres
+    ports:
+       - "5432:5432"  # (DEBUG ONLY) Commented out for production security
+    environment:
+      - POSTGRES_USER=postgres_user
+      - POSTGRES_PASSWORD=secure_postgres_pass123
+      - POSTGRES_DB=iot_ingestion_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Persists your tables when containers stop
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+# Named volumes ensure your hardware data isn't wiped out during docker rebuilds
+volumes:
+  minio_storage:
+  postgres_data:

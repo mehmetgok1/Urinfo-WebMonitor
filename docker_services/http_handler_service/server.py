@@ -1,18 +1,29 @@
 import os
+import json
 import datetime
-import time
 import signal
 import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import boto3
+from botocore.config import Config
 
-# Configuration from Environment Variables (Fallback to defaults)
+# 1. Configuration from Environment Variables
 PORT = int(os.environ.get("SERVER_PORT", 8000))
-DATA_DIR = os.environ.get("DATA_DIR", "/app/received_sessions")
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
+MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "admin")
+MINIO_ROOT_PASSWORD = os.environ.get("MINIO_ROOT_PASSWORD", "password123")
+BUCKET_NAME = "esp32-data"
 
-# Packet specifications matching your ESP struct
-PACKET_SIZE = 24633
-PACKETS_PER_FILE = 50
-CHUNK_SIZE = PACKET_SIZE * PACKETS_PER_FILE
+# 2. Initialize the S3 Client for MinIO
+# We use path style because MinIO doesn't use subdomains like AWS does locally
+s3_client = boto3.client(
+    's3',
+    endpoint_url=f"http://{MINIO_ENDPOINT}",
+    aws_access_key_id=MINIO_ROOT_USER,
+    aws_secret_access_key=MINIO_ROOT_PASSWORD,
+    config=Config(signature_version='s3v4'),
+    region_name='us-east-1'
+)
 
 server = None
 
@@ -22,108 +33,82 @@ def handle_shutdown(signum, frame):
         server.server_close()
     sys.exit(0)
 
-# Register Linux signals for Docker container stop actions
 signal.signal(signal.SIGTERM, handle_shutdown)
 signal.signal(signal.SIGINT, handle_shutdown)
 
 class ESPUploadHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        if self.path == '/upload':
-            self.handle_upload()
+        # Change endpoint name to match its true purpose
+        if self.path == '/api/device/request-upload-url':
+            self.handle_url_request()
         else:
             self.send_error(404, "Endpoint not found")
 
-    def handle_upload(self):
-        print(f"[HTTP Server] Connection accepted from {self.client_address}")
+    def handle_url_request(self):
+        print(f"[HTTP Server] URL Request from {self.client_address}")
         
-        # Read custom metadata headers from the ESP32
+        # Read the identification headers sent by ESP32
         device_id = self.headers.get('X-Device-ID', 'unknown_device')
         folder_name = self.headers.get('X-Folder-Name')
-        part_index_str = self.headers.get('X-Part-Index', '0')
         
+        # Generate a clean filename structure for MinIO
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         if folder_name:
-            session_folder = os.path.join(DATA_DIR, f"{device_id}/{folder_name}")
-            file_prefix = folder_name
+            object_key = f"{device_id}/{folder_name}/{folder_name}_{timestamp}.bin"
         else:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            session_folder = os.path.join(DATA_DIR, f"{device_id}/{timestamp}")
-            file_prefix = timestamp
-            
-        os.makedirs(session_folder, exist_ok=True)
-        
-        content_length_str = self.headers.get('Content-Length')
-        if not content_length_str:
-            self.send_error(400, "Content-Length header is missing")
-            return
+            object_key = f"{device_id}/{timestamp}/{timestamp}.bin"
             
         try:
-            bytes_to_read = int(content_length_str)
-        except ValueError:
-            self.send_error(400, "Invalid Content-Length")
-            return
+            # Generate the secure presigned PUT URL
+            # Note: The 'endpoint_url' here needs to be reachable by the ESP32!
+            lan_ip = self.headers.get('Host').split(':')[0] # Dynamically gets your laptop's LAN IP
+            # Re-generate client specific for the external URL signature mapping
+            lan_s3_client = boto3.client(
+                's3',
+                endpoint_url=f"http://{lan_ip}:9000",
+                aws_access_key_id=MINIO_ROOT_USER,
+                aws_secret_access_key=MINIO_ROOT_PASSWORD,
+                config=Config(signature_version='s3v4'),
+                region_name='us-east-1'
+            )
 
-        buffer = bytearray()
-        try:
-            part_index = int(part_index_str)
-        except ValueError:
-            part_index = 0
-        bytes_read_total = 0
-        
-        try:
-            while bytes_read_total < bytes_to_read:
-                # Read in chunks, bounded by what's left to read
-                chunk_to_read = min(8192, bytes_to_read - bytes_read_total)
-                data = self.rfile.read(chunk_to_read)
-                if not data:
-                    break
-                    
-                buffer.extend(data)
-                bytes_read_total += len(data)
-                
-                # Write to file whenever CHUNK_SIZE is reached
-                while len(buffer) >= CHUNK_SIZE:
-                    file_path = os.path.join(session_folder, f"{file_prefix}_part_{part_index}.bin")
-                    with open(file_path, "wb") as f:
-                        f.write(buffer[:CHUNK_SIZE])
-                    
-                    buffer = buffer[CHUNK_SIZE:]
-                    part_index += PACKETS_PER_FILE
-                    
-            # Write remaining data (the tail end of the stream)
-            if len(buffer) > 0:
-                if len(buffer) % PACKET_SIZE != 0:
-                    print(f"[HTTP Server] WARNING: Stream ended with an incomplete packet! "
-                          f"Remaining bytes: {len(buffer)}. Expected a multiple of {PACKET_SIZE}.")
-                else:
-                    print(f"[HTTP Server] Final buffer contains {len(buffer) // PACKET_SIZE} exact packets.")
-                    
-                file_path = os.path.join(session_folder, f"{file_prefix}_part_{part_index}.bin")
-                with open(file_path, "wb") as f:
-                    f.write(buffer)
-                    
-            print(f"[HTTP Server] Upload finished. Data saved to {session_folder}")
+            presigned_url = lan_s3_client.generate_presigned_url(
+                ClientMethod='put_object',
+                Params={
+                    'Bucket': BUCKET_NAME,
+                    'Key': object_key,
+                    'ContentType': 'application/octet-stream'
+                },
+                ExpiresIn=600 # Valid for 10 minutes
+            )
+            
+            # Send the text URL back to the ESP32 as JSON
+            response_data = {
+                "status": "approved",
+                "upload_url": presigned_url,
+                "object_key": object_key
+            }
             
             self.send_response(200)
-            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(b"Upload successful\n")
+            self.wfile.write(json.dumps(response_data).encode('utf-8'))
+            print(f"[HTTP Server] Successfully handed URL to device {device_id}")
             
         except Exception as e:
-            print(f"[HTTP Server] Error processing upload: {e}")
+            print(f"[HTTP Server] Error generating presigned URL: {e}")
             self.send_error(500, "Internal Server Error")
 
 def main():
     global server
-    print(f"[HTTP Server] Starting up. Output directory: {DATA_DIR}")
+    print(f"[HTTP Server] Starting up Gatekeeper server...")
     server_address = ('0.0.0.0', PORT)
     try:
         server = HTTPServer(server_address, ESPUploadHandler)
-        print(f"[HTTP Server] Listening for HTTP POST on port {PORT} at /upload ...")
+        print(f"[HTTP Server] Listening on port {PORT} at /api/device/request-upload-url ...")
         server.serve_forever()
     except KeyboardInterrupt:
         pass
-    except Exception as e:
-        print(f"[HTTP Server] Failed to start server: {e}")
     finally:
         if server:
             server.server_close()
