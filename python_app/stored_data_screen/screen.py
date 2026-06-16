@@ -425,6 +425,20 @@ class StoredDataScreen(QWidget):
         video_layout.addStretch()
         layout.addLayout(video_layout)
         
+        #mini plot grid for RGB averages
+        self.rgb_keys =[
+            ('rgb_avg_r', 'RGB Average R', '#ff7b72'),
+            ('rgb_avg_g', 'RGB Average G', '#39d353'),
+            ('rgb_avg_b', 'RGB Average B', '#79c0ff')
+        ]
+        self.mini_plots2 = {}
+        plots_layout2 = QGridLayout()
+        plots_layout2.setSpacing(10)
+        for i, (key, title, color) in enumerate(self.rgb_keys):
+            plot_widget = MiniPlotWidget(title, color)
+            self.mini_plots2[key] = plot_widget
+            plots_layout2.addWidget(plot_widget, i // 3, i % 3)
+        layout.addLayout(plots_layout2)
         # Mini Plots Grid (3 per row)
         self.plot_keys = [
             ('temperature', 'Temperature (°C)', '#ff7b72'),
