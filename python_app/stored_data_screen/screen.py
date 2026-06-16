@@ -661,6 +661,7 @@ class StoredDataScreen(QWidget):
             self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
             
             # --- Detect and draw circle for ir gray using raw data ---
+            #below can be modified for hough circles but not recommended due to low resolution of 12x16
             if self.ir_raw_frames:
                 current_ir_raw = self.ir_raw_frames[index] # 12x16 numpy array of uint16
 
