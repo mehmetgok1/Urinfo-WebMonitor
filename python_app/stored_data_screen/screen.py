@@ -544,24 +544,9 @@ class StoredDataScreen(QWidget):
             ir_img = self.ir_frames[index]
             rgb_pix = QPixmap.fromImage(img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             ir_pix = QPixmap.fromImage(ir_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-            # --- Calculate average color for center 16x16 ---
-            r_sum = g_sum = b_sum = 0
-            # Center 16x16 in a 64x64 image is exactly from index 24 to 40
-            for x in range(24, 40):
-                for y in range(24, 40):
-                    c = img.pixelColor(x, y)
-                    r_sum += c.red()
-                    g_sum += c.green()
-                    b_sum += c.blue()
-                    
-            avg_r, avg_g, avg_b = r_sum // 256, g_sum // 256, b_sum // 256
-            hex_color = f"#{avg_r:02x}{avg_g:02x}{avg_b:02x}"
-            self.lbl_rgb_avg_text.setText(f"Center\n16x16\n{hex_color.upper()}")
-            self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
-            
             self.rgb_view.setPixmap(rgb_pix)
-            self.ir_view.setPixmap(ir_pix)
-            
+            self.ir_view.setPixmap(ir_pix) 
+
             # --- Detect and draw circle for rgb gray--- 
             # later instead of below we can try to use q_img_gray = img.convertToFormat(QImage.Format_Grayscale8)
             ptr = img.constBits()
@@ -570,7 +555,6 @@ class StoredDataScreen(QWidget):
                 arr = np.array(ptr, copy=False).reshape((img.height(), img.width(), 3))
             except TypeError:
                 arr = np.array(ptr).reshape((img.height(), img.width(), 3))
-                
             gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
             gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75)
             gray_blurred = cv2.GaussianBlur(gray_filtered, (7, 7), 1.5)
@@ -591,6 +575,8 @@ class StoredDataScreen(QWidget):
                 minRadius=8, 
                 maxRadius=50
             )
+            print(circles)
+            print("deneme")
             if circles is not None:
                 circles = np.uint16(np.around(circles))
                 painter = QPainter(rgb_gray_pixmap)
@@ -599,13 +585,40 @@ class StoredDataScreen(QWidget):
                 scale_y = 256 / img.height()
                 # Select the most prominent circle (highest accumulator value)
                 best_circle = circles[0, np.argmax(circles[0, :, 2])]
+                orig_x = int(best_circle[0])
+                orig_y = int(best_circle[1])
+                orig_radius = int(best_circle[2])
                 center_x = int(best_circle[0] * scale_x)
                 center_y = int(best_circle[1] * scale_y)
                 radius = int(best_circle[2] * scale_x)
                 painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
                 painter.end()
-           
+
             self.rgb_gray_view.setPixmap(rgb_gray_pixmap)
+
+             # --- Calculate average color inside circle---
+            r_sum = g_sum = b_sum = 0
+            # Center avg color according to circle
+            if(circles is not None):
+                for x in range(0, 63):
+                    for y in range(0,63):   
+                        if (x - orig_x)**2 + (y - orig_y)**2 <= orig_radius**2:
+                            c = img.pixelColor(x, y)
+                            r_sum += c.red()
+                            g_sum += c.green()
+                            b_sum += c.blue()
+            else:
+                for x in range(24, 40):
+                    for y in range(24,40):   
+                        c = img.pixelColor(x, y)
+                        r_sum += c.red()
+                        g_sum += c.green()
+                        b_sum += c.blue()
+             
+            avg_r, avg_g, avg_b = r_sum // 256, g_sum // 256, b_sum // 256
+            hex_color = f"#{avg_r:02x}{avg_g:02x}{avg_b:02x}"
+            self.lbl_rgb_avg_text.setText(f"Center\circle\n{hex_color.upper()}")
+            self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
             
             # --- Detect and draw circle for ir gray---
             ptr = ir_img.constBits()
