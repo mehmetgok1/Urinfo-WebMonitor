@@ -599,29 +599,28 @@ class StoredDataScreen(QWidget):
         if 0 <= index < len(self.rgb_frames):
             img = self.rgb_frames[index]
             ir_img = self.ir_frames[index]
+            
+            # Use explicit centered targets or uniform scaling structures
             rgb_pix = QPixmap.fromImage(img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             ir_pix = QPixmap.fromImage(ir_img).scaled(256, 256, Qt.KeepAspectRatio, Qt.FastTransformation)
             self.rgb_view.setPixmap(rgb_pix)
             self.ir_view.setPixmap(ir_pix) 
 
-            # --- Detect and draw circle for rgb gray--- 
-            # later instead of below we can try to use q_img_gray = img.convertToFormat(QImage.Format_Grayscale8)
-            ptr = img.constBits()
-            ptr.setsize(img.byteCount())
-            try:
-                arr = np.array(ptr, copy=False).reshape((img.height(), img.width(), 3))
-            except TypeError:
-                arr = np.array(ptr).reshape((img.height(), img.width(), 3))
-            gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+            # --- Detect and draw circle for rgb gray --- 
+            # Safe, fast native Qt conversion to avoid raw memory pointer corruption
+            rgb_gray_img = img.convertToFormat(QImage.Format_Grayscale8)
+            h_rgb, w_rgb = rgb_gray_img.height(), rgb_gray_img.width()
+            
+            # Extract bytes safely to NumPy for circle fitting processing
+            ptr = rgb_gray_img.bits()
+            ptr.setsize(rgb_gray_img.byteCount())
+            gray = np.array(ptr, copy=False).reshape((h_rgb, w_rgb))
+            
             gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75)
             gray_blurred = cv2.GaussianBlur(gray_filtered, (7, 7), 1.5)
-            #get dimensions of the grayscale image
-            h, w = gray.shape
-             # 2. Convert NumPy array to QImage  //tobytes() copy .data use same location:)
-            rgb_gray_img = QImage(gray.tobytes(), w, h, w, QImage.Format_Grayscale8).copy()
-            # 3. Convert QImage to QPixmap
+            
             rgb_gray_pixmap = QPixmap.fromImage(rgb_gray_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-            # Enhanced circle detection with better parameters
+            
             circles = cv2.HoughCircles(
                 gray_blurred, 
                 cv2.HOUGH_GRADIENT, 
@@ -636,10 +635,13 @@ class StoredDataScreen(QWidget):
             if circles is not None:
                 circles = np.uint16(np.around(circles))
                 painter = QPainter(rgb_gray_pixmap)
+                painter.setRenderHint(QPainter.Antialiasing)
                 painter.setPen(QPen(QColor(255, 0, 0), 2))
-                scale_x = 256 / img.width()
-                scale_y = 256 / img.height()
-                # Select the most prominent circle (highest radius value)
+                
+                # Dynamically match visual space size
+                scale_x = rgb_gray_pixmap.width() / w_rgb
+                scale_y = rgb_gray_pixmap.height() / h_rgb
+                
                 best_circle = circles[0, np.argmax(circles[0, :, 2])]
                 center_x = int(best_circle[0] * scale_x)
                 center_y = int(best_circle[1] * scale_y)
@@ -649,13 +651,13 @@ class StoredDataScreen(QWidget):
 
             self.rgb_gray_view.setPixmap(rgb_gray_pixmap)
 
-            # --- Fetch precalculated average color inside circle---
+            # --- Fetch precalculated average color inside circle ---
             avg_r = int(self.sensor_data['rgb_avg_r'][index]) if 'rgb_avg_r' in self.sensor_data and len(self.sensor_data['rgb_avg_r']) > index else 0
             avg_g = int(self.sensor_data['rgb_avg_g'][index]) if 'rgb_avg_g' in self.sensor_data and len(self.sensor_data['rgb_avg_g']) > index else 0
             avg_b = int(self.sensor_data['rgb_avg_b'][index]) if 'rgb_avg_b' in self.sensor_data and len(self.sensor_data['rgb_avg_b']) > index else 0
 
             hex_color = f"#{avg_r:02x}{avg_g:02x}{avg_b:02x}"
-            self.lbl_rgb_avg_text.setText(f"Center\circle\n{hex_color.upper()}")
+            self.lbl_rgb_avg_text.setText(f"Center\\circle\n{hex_color.upper()}")
             self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
             
             # --- Detect and draw circle for ir gray using raw data ---
@@ -712,7 +714,7 @@ class StoredDataScreen(QWidget):
 
                 self.ir_gray_view.setPixmap(ir_gray_pixmap)
 
-        # Tell the plots to draw the marker line at the current timeline index
+        # Update plotting timelines
         for plot_widget in self.mini_plots.values():
             plot_widget.set_current_index(index)
         for plot_widget in self.mini_plots2.values():
