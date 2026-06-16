@@ -158,7 +158,7 @@ class MiniPlotWidget(QWidget):
 
 class DataLoaderThread(QThread):
     progress = pyqtSignal(int)
-    finished_data = pyqtSignal(list, list, dict, str)
+    finished_data = pyqtSignal(list, list, list, dict, str)
     error = pyqtSignal(str)
 
     def __init__(self, folder_path):
@@ -182,6 +182,7 @@ class DataLoaderThread(QThread):
 
             rgb_frames = []
             ir_frames = []
+            ir_raw_frames = []
             
             # Dictionary to strictly separate out all other variables
             sensor_data = {
@@ -267,6 +268,7 @@ class DataLoaderThread(QThread):
                     
                     # Process IR Thermal Heatmap
                     ir_raw = packet['irFrame'].reshape((12, 16))
+                    ir_raw_frames.append(ir_raw)
                     ir_celsius = (ir_raw / 100.0) - 40
                     min_val, max_val = ir_celsius.min(), ir_celsius.max()
                     if max_val == min_val: max_val = min_val + 1
@@ -302,7 +304,7 @@ class DataLoaderThread(QThread):
                 else:
                     sensor_data[key] = np.array([])
 
-            self.finished_data.emit(rgb_frames, ir_frames, sensor_data, stats_msg)
+            self.finished_data.emit(rgb_frames, ir_frames, ir_raw_frames, sensor_data, stats_msg)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -312,6 +314,7 @@ class StoredDataScreen(QWidget):
         super().__init__()
         self.rgb_frames = []
         self.ir_frames = []
+        self.ir_raw_frames = []
         self.rgb_gray_frames = []
         self.ir_gray_frames = []
         self.sensor_data = {}
@@ -496,11 +499,12 @@ class StoredDataScreen(QWidget):
         self.loader.error.connect(self.on_load_error)
         self.loader.start()
 
-    def on_data_loaded(self, rgb, ir, sensor_data, stats_msg):
+    def on_data_loaded(self, rgb, ir, ir_raw, sensor_data, stats_msg):
         self.progress_bar.setVisible(False)
         self.btn_select_folder.setEnabled(True)
         self.rgb_frames = rgb
         self.ir_frames = ir
+        self.ir_raw_frames = ir_raw
         self.sensor_data = sensor_data
         
         # Preserve the flattened audio data specifically for the audio plot function
@@ -543,7 +547,7 @@ class StoredDataScreen(QWidget):
             img = self.rgb_frames[index]
             ir_img = self.ir_frames[index]
             rgb_pix = QPixmap.fromImage(img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-            ir_pix = QPixmap.fromImage(ir_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            ir_pix = QPixmap.fromImage(ir_img).scaled(256, 256, Qt.KeepAspectRatio, Qt.FastTransformation)
             self.rgb_view.setPixmap(rgb_pix)
             self.ir_view.setPixmap(ir_pix) 
 
@@ -575,15 +579,14 @@ class StoredDataScreen(QWidget):
                 minRadius=8, 
                 maxRadius=50
             )
-            print(circles)
-            print("deneme")
+
             if circles is not None:
                 circles = np.uint16(np.around(circles))
                 painter = QPainter(rgb_gray_pixmap)
                 painter.setPen(QPen(QColor(255, 0, 0), 2))
                 scale_x = 256 / img.width()
                 scale_y = 256 / img.height()
-                # Select the most prominent circle (highest accumulator value)
+                # Select the most prominent circle (highest radius value)
                 best_circle = circles[0, np.argmax(circles[0, :, 2])]
                 orig_x = int(best_circle[0])
                 orig_y = int(best_circle[1])
@@ -620,49 +623,59 @@ class StoredDataScreen(QWidget):
             self.lbl_rgb_avg_text.setText(f"Center\circle\n{hex_color.upper()}")
             self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
             
-            # --- Detect and draw circle for ir gray---
-            ptr = ir_img.constBits()
-            ptr.setsize(ir_img.byteCount())
-            try:
-                arr2 = np.array(ptr, copy=False).reshape((ir_img.height(), ir_img.width(), 3))
-            except TypeError:
-                arr2 = np.array(ptr).reshape((ir_img.height(), ir_img.width(), 3))
-                
-            gray2 = cv2.cvtColor(arr2, cv2.COLOR_RGB2GRAY)
-            gray_filtered2 = cv2.bilateralFilter(gray2, 9, 75, 75)
-            gray_blurred2 = cv2.GaussianBlur(gray_filtered2, (7, 7), 1.5)
-            #get dimensions of the grayscale image
-            h, w = gray2.shape
-             # 2. Convert NumPy array to QImage 
-            q_img2 = QImage(gray2.data, w, h, w, QImage.Format_Grayscale8).copy()
-            # 3. Convert QImage to QPixmap
-            ir_gray_pixmap = QPixmap.fromImage(q_img2).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-            circles = cv2.HoughCircles(
-                gray_blurred2, 
-                cv2.HOUGH_GRADIENT, 
-                dp=1.0, 
-                minDist=30,
-                param1=70, 
-                param2=20, 
-                minRadius=8, 
-                maxRadius=50
-            )
-            if circles is not None:
-                circles = np.uint16(np.around(circles))
+            # --- Detect and draw circle for ir gray using raw data ---
+            if self.ir_raw_frames:
+                current_ir_raw = self.ir_raw_frames[index] # 12x16 numpy array of uint16
+
+                # Find the hottest spot from the raw data
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(current_ir_raw)
+                orig_x, orig_y = max_loc
+
+                # For visualization, normalize the raw data to a 0-255 grayscale image
+                if max_val == min_val:
+                    max_val = min_val + 1
+
+                gray_normalized = ((current_ir_raw - min_val) / (max_val - min_val) * 255).astype(np.uint8)
+
+                # --- NEW: Calculate Centroid instead of single max pixel location ---
+                # Threshold the image to isolate the top 20% hottest pixels
+                _, thresh = cv2.threshold(gray_normalized, 200, 255, cv2.THRESH_BINARY)
+                M = cv2.moments(thresh)
+
+                if M["m00"] != 0:
+                    # Calculate stable center of mass
+                    orig_x = M["m10"] / M["m00"]
+                    orig_y = M["m01"] / M["m00"]
+                else:
+                    # Fallback to max_loc if threshold returns an empty mask
+                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(current_ir_raw)
+                    orig_x, orig_y = max_loc
+
+                h, w = gray_normalized.shape
+                q_img_gray = QImage(gray_normalized.data, w, h, w, QImage.Format_Grayscale8).copy()
+
+                # Scale the image keeping aspect ratio
+                ir_gray_pixmap = QPixmap.fromImage(q_img_gray).scaled(256, 256, Qt.KeepAspectRatio, Qt.FastTransformation)
+
+                actual_w = ir_gray_pixmap.width()   # 256
+                actual_h = ir_gray_pixmap.height()  # 192
+
+                scale_x = actual_w / w
+                scale_y = actual_h / h
+
+                # Float values from centroid preserve precision beautifully during upscaling
+                center_x = int((orig_x + 0.5) * scale_x)
+                center_y = int((orig_y + 0.5) * scale_y)
+                radius = int(1.5 * scale_x)
+
+                # Draw circle on the pixmap
                 painter = QPainter(ir_gray_pixmap)
+                painter.setRenderHint(QPainter.Antialiasing)
                 painter.setPen(QPen(QColor(255, 0, 0), 2))
-                scale_x = 256 / ir_img.width()
-                scale_y = 256 / ir_img.height()
-                # Select the most prominent circle (highest accumulator value)
-                best_circle = circles[0, np.argmax(circles[0, :, 2])]
-                center_x = int(best_circle[0] * scale_x)
-                center_y = int(best_circle[1] * scale_y)
-                radius = int(best_circle[2] * scale_x)
                 painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
                 painter.end()
-           
-            # Enhanced circle detection with better parameters
-            self.ir_gray_view.setPixmap(ir_gray_pixmap)
+
+                self.ir_gray_view.setPixmap(ir_gray_pixmap)
 
         # Tell the plots to draw the marker line at the current timeline index
         for plot_widget in self.mini_plots.values():
