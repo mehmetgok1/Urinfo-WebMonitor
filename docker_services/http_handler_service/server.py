@@ -6,6 +6,7 @@ import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import boto3
 from botocore.config import Config
+import psycopg2 # Make sure to add psycopg2-binary to your requirements.txt!
 
 # 1. Configuration from Environment Variables
 PORT = int(os.environ.get("SERVER_PORT", 8000))
@@ -13,6 +14,13 @@ MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "admin")
 MINIO_ROOT_PASSWORD = os.environ.get("MINIO_ROOT_PASSWORD", "password123")
 BUCKET_NAME = "esp32-data"
+
+# PostgreSQL Configuration
+DB_HOST = os.environ.get("DB_HOST", "postgres")
+DB_PORT = os.environ.get("DB_PORT", "5432")
+DB_USER = os.environ.get("DB_USER", "postgres_user")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "secure_postgres_pass123")
+DB_NAME = os.environ.get("DB_NAME", "iot_ingestion_db")
 
 # 2. Initialize the S3 Client for MinIO
 # We use path style because MinIO doesn't use subdomains like AWS does locally
@@ -58,6 +66,33 @@ class ESPUploadHandler(BaseHTTPRequestHandler):
         else:
             object_key = f"{device_id}/{timestamp}/{timestamp}.bin"
             
+        # --- PostgreSQL Database Verification & Logging ---
+        db_conn = None
+        try:
+            db_conn = psycopg2.connect(
+                host=DB_HOST,
+                port=DB_PORT,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                dbname=DB_NAME
+            )
+            cursor = db_conn.cursor()
+            
+            # 1. Verify Device Exists
+            cursor.execute("SELECT id FROM devices WHERE id = %s", (device_id,))
+            if cursor.fetchone() is None:
+                print(f"[HTTP Server] Rejected request: Device {device_id} is not registered.")
+                self.send_error(403, "Forbidden: Device not registered")
+                cursor.close()
+                db_conn.close()
+                return
+                
+        except Exception as db_err:
+            print(f"[HTTP Server] Database error: {db_err}")
+            self.send_error(500, "Internal Server Error")
+            if db_conn: db_conn.close()
+            return
+            
         try:
             # Generate the secure presigned PUT URL
             # Note: The 'endpoint_url' here needs to be reachable by the ESP32!
@@ -82,6 +117,15 @@ class ESPUploadHandler(BaseHTTPRequestHandler):
                 ExpiresIn=600 # Valid for 10 minutes
             )
             
+            # 2. Log the expected upload into the database
+            cursor.execute(
+                "INSERT INTO uploads (device_id, object_key) VALUES (%s, %s)",
+                (device_id, object_key)
+            )
+            db_conn.commit()
+            cursor.close()
+            db_conn.close()
+            
             # Send the text URL back to the ESP32 as JSON
             response_data = {
                 "status": "approved",
@@ -98,6 +142,8 @@ class ESPUploadHandler(BaseHTTPRequestHandler):
         except Exception as e:
             print(f"[HTTP Server] Error generating presigned URL: {e}")
             self.send_error(500, "Internal Server Error")
+            if db_conn:
+                db_conn.close()
 
 def main():
     global server
