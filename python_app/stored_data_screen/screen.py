@@ -199,6 +199,8 @@ class DataLoaderThread(QThread):
                 'microphoneSamples': []
             }
             
+            color_averages = {'rgb_avg_r': [], 'rgb_avg_g': [], 'rgb_avg_b': []}
+            
             total_expected = 0
             total_extracted = 0
             total_skipped_bytes = 0
@@ -266,6 +268,33 @@ class DataLoaderThread(QThread):
                     qimg_rgb = QImage(img_rgb.tobytes(), w, h, 3 * w, QImage.Format_RGB888).copy()
                     rgb_frames.append(qimg_rgb)
                     
+                    # Extract exact RGB averages for plotting
+                    gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
+                    gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+                    gray_blurred = cv2.GaussianBlur(gray_filtered, (7, 7), 1.5)
+                    circles = cv2.HoughCircles(
+                        gray_blurred, 
+                        cv2.HOUGH_GRADIENT, 
+                        dp=1.0, 
+                        minDist=30,
+                        param1=70, 
+                        param2=20, 
+                        minRadius=8, 
+                        maxRadius=50
+                    )
+                    if circles is not None:
+                        circles = np.uint16(np.around(circles))
+                        best_circle = circles[0, np.argmax(circles[0, :, 2])]
+                        mask = np.zeros((64, 64), dtype=np.uint8)
+                        cv2.circle(mask, (int(best_circle[0]), int(best_circle[1])), int(best_circle[2]), 255, -1)
+                        mean_val = cv2.mean(img_rgb, mask=mask)
+                    else:
+                        mean_val = cv2.mean(img_rgb[24:40, 24:40])
+                    
+                    color_averages['rgb_avg_r'].append(mean_val[0])
+                    color_averages['rgb_avg_g'].append(mean_val[1])
+                    color_averages['rgb_avg_b'].append(mean_val[2])
+                    
                     # Process IR Thermal Heatmap
                     ir_raw = packet['irFrame'].reshape((12, 16))
                     ir_raw_frames.append(ir_raw)
@@ -303,6 +332,10 @@ class DataLoaderThread(QThread):
                     sensor_data[key] = np.concatenate(sensor_data[key])
                 else:
                     sensor_data[key] = np.array([])
+
+            sensor_data['rgb_avg_r'] = np.array(color_averages['rgb_avg_r'])
+            sensor_data['rgb_avg_g'] = np.array(color_averages['rgb_avg_g'])
+            sensor_data['rgb_avg_b'] = np.array(color_averages['rgb_avg_b'])
 
             self.finished_data.emit(rgb_frames, ir_frames, ir_raw_frames, sensor_data, stats_msg)
         except Exception as e:
@@ -533,6 +566,12 @@ class StoredDataScreen(QWidget):
                 plot_widget.set_data(sensor_data[key])
             else:
                 plot_widget.set_data(np.array([]))
+                
+        for key, plot_widget in self.mini_plots2.items():
+            if key in sensor_data and len(sensor_data[key]) > 0:
+                plot_widget.set_data(sensor_data[key])
+            else:
+                plot_widget.set_data(np.array([]))
         
         if self.rgb_frames:
             self.slider.setRange(0, len(self.rgb_frames) - 1)
@@ -602,9 +641,6 @@ class StoredDataScreen(QWidget):
                 scale_y = 256 / img.height()
                 # Select the most prominent circle (highest radius value)
                 best_circle = circles[0, np.argmax(circles[0, :, 2])]
-                orig_x = int(best_circle[0])
-                orig_y = int(best_circle[1])
-                orig_radius = int(best_circle[2])
                 center_x = int(best_circle[0] * scale_x)
                 center_y = int(best_circle[1] * scale_y)
                 radius = int(best_circle[2] * scale_x)
@@ -613,26 +649,11 @@ class StoredDataScreen(QWidget):
 
             self.rgb_gray_view.setPixmap(rgb_gray_pixmap)
 
-             # --- Calculate average color inside circle---
-            r_sum = g_sum = b_sum = 0
-            # Center avg color according to circle
-            if(circles is not None):
-                for x in range(0, 63):
-                    for y in range(0,63):   
-                        if (x - orig_x)**2 + (y - orig_y)**2 <= orig_radius**2:
-                            c = img.pixelColor(x, y)
-                            r_sum += c.red()
-                            g_sum += c.green()
-                            b_sum += c.blue()
-            else:
-                for x in range(24, 40):
-                    for y in range(24,40):   
-                        c = img.pixelColor(x, y)
-                        r_sum += c.red()
-                        g_sum += c.green()
-                        b_sum += c.blue()
-             
-            avg_r, avg_g, avg_b = r_sum // 256, g_sum // 256, b_sum // 256
+            # --- Fetch precalculated average color inside circle---
+            avg_r = int(self.sensor_data['rgb_avg_r'][index]) if 'rgb_avg_r' in self.sensor_data and len(self.sensor_data['rgb_avg_r']) > index else 0
+            avg_g = int(self.sensor_data['rgb_avg_g'][index]) if 'rgb_avg_g' in self.sensor_data and len(self.sensor_data['rgb_avg_g']) > index else 0
+            avg_b = int(self.sensor_data['rgb_avg_b'][index]) if 'rgb_avg_b' in self.sensor_data and len(self.sensor_data['rgb_avg_b']) > index else 0
+
             hex_color = f"#{avg_r:02x}{avg_g:02x}{avg_b:02x}"
             self.lbl_rgb_avg_text.setText(f"Center\circle\n{hex_color.upper()}")
             self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
@@ -693,6 +714,8 @@ class StoredDataScreen(QWidget):
 
         # Tell the plots to draw the marker line at the current timeline index
         for plot_widget in self.mini_plots.values():
+            plot_widget.set_current_index(index)
+        for plot_widget in self.mini_plots2.values():
             plot_widget.set_current_index(index)
 
     def toggle_playback(self):
