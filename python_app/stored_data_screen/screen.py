@@ -410,7 +410,7 @@ class StoredDataScreen(QWidget):
         
         # Center Color Detection UI (Vertical layout for the left side)
         color_vbox = QVBoxLayout()
-        self.lbl_rgb_avg_text = QLabel("Center\n16x16\n--")
+        self.lbl_rgb_avg_text = QLabel("circle\ncolour\n--")
         self.lbl_rgb_avg_text.setAlignment(Qt.AlignCenter)
         self.lbl_rgb_avg_text.setStyleSheet("color: #8b949e; font-size: 11px; font-weight: bold;")
         self.lbl_rgb_avg_color = QLabel()
@@ -446,7 +446,15 @@ class StoredDataScreen(QWidget):
         self.ir_gray_view.setAlignment(Qt.AlignCenter)
         ir_gray_vbox.addWidget(ir_gray_lbl)
         ir_gray_vbox.addWidget(self.ir_gray_view)
-        
+
+        temperature_vbox = QVBoxLayout()
+        self.lbl_temp_avg_text = QLabel("circle\ntemperature\n--")
+        self.lbl_temp_avg_text.setAlignment(Qt.AlignCenter)
+        self.lbl_temp_avg_text.setStyleSheet("color: #8b949e; font-size: 11px; font-weight: bold;")
+        temperature_vbox.addStretch()
+        temperature_vbox.addWidget(self.lbl_temp_avg_text, alignment=Qt.AlignCenter)
+        temperature_vbox.addStretch()
+
         video_layout.addStretch()
         video_layout.addLayout(color_vbox)
         video_layout.addSpacing(15)
@@ -455,6 +463,7 @@ class StoredDataScreen(QWidget):
         video_layout.addSpacing(40)
         video_layout.addLayout(ir_vbox)
         video_layout.addLayout(ir_gray_vbox)
+        video_layout.addLayout(temperature_vbox)
         video_layout.addStretch()
         layout.addLayout(video_layout)
         
@@ -714,6 +723,13 @@ class StoredDataScreen(QWidget):
                 painter.end()
 
                 self.ir_gray_view.setPixmap(ir_gray_pixmap)
+                
+                ## avg temperature inside circle
+                mask = np.zeros((12, 16), dtype=np.uint8)
+                cv2.circle(mask, (int(orig_x + 0.5), int(orig_y + 0.5)), 2, 255, -1)
+                mean_raw_val = cv2.mean(current_ir_raw.astype(np.float32), mask=mask)[0]
+                temp_celsius = (mean_raw_val / 100.0) - 40
+                self.lbl_temp_avg_text.setText(f"circle\ntemperature\n{temp_celsius:.1f} °C")
 
         # Update plotting timelines
         for plot_widget in self.mini_plots.values():
