@@ -155,7 +155,8 @@ class MiniPlotWidget(QWidget):
         painter.drawText(2, pad_y_top + 4, f"{max_v:.1f}")
         painter.drawText(2, h - pad_y_bottom, f"{min_v:.1f}")
 
-
+MIN_TEMP = 20.0  # Maps to 0 (Dark Blue/Black region)
+MAX_TEMP = 50.0  # Maps to 255 (Hot/Red region)
 class DataLoaderThread(QThread):
     progress = pyqtSignal(int)
     finished_data = pyqtSignal(list, list, list, dict, str)
@@ -296,14 +297,18 @@ class DataLoaderThread(QThread):
                     color_averages['rgb_avg_b'].append(mean_val[2])
                     
                     # Process IR Thermal Heatmap
+                    
                     ir_raw = packet['irFrame'].reshape((12, 16))
                     ir_raw_frames.append(ir_raw)
+                    # Convert to Celsius
                     ir_celsius = (ir_raw / 100.0) - 40
-                    min_val, max_val = ir_celsius.min(), ir_celsius.max()
-                    if max_val == min_val: max_val = min_val + 1
-                    norm = (ir_celsius - min_val) / (max_val - min_val)
+                    # 1. Clip temperatures strictly to your [20, 50] range
+                    clipped_celsius = np.clip(ir_celsius, MIN_TEMP, MAX_TEMP)
+                    # 2. Normalize using your fixed bounds (not the frame's min/max)
+                    norm = (clipped_celsius - MIN_TEMP) / (MAX_TEMP - MIN_TEMP)
                     mapped = (norm * 255).astype(np.uint8)
-                    heatmap = cv2.applyColorMap(mapped, cv2.COLORMAP_TURBO)
+                    # 3. Apply the colormap
+                    heatmap = cv2.applyColorMap(mapped, cv2.COLORMAP_JET)
                     heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
                     qimg_ir = QImage(heatmap_rgb.tobytes(), 16, 12, 3 * 16, QImage.Format_RGB888).copy()
                     ir_frames.append(qimg_ir)
