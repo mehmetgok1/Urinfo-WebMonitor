@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, 
                              QFileDialog, QSlider, QProgressBar, QMessageBox, QScrollArea)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import QPoint, Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QPen, QPainterPath
 import re
 
@@ -669,68 +669,99 @@ class StoredDataScreen(QWidget):
             self.lbl_rgb_avg_text.setText(f"Center\\circle\n{hex_color.upper()}")
             self.lbl_rgb_avg_color.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #30363d; border-radius: 4px;")
             
-            # --- Detect and draw circle for ir gray using raw data ---
-            #below can be modified for hough circles but not recommended due to low resolution of 12x16
+            # --- Detect and draw circle for IR gray using raw thermal data ---
             if self.ir_raw_frames:
-                current_ir_raw = self.ir_raw_frames[index] # 12x16 numpy array of uint16
-
-                # Find the hottest spot from the raw data
-                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(current_ir_raw)
-                orig_x, orig_y = max_loc
-
-                # For visualization, normalize the raw data to a 0-255 grayscale image
-                if max_val == min_val:
-                    max_val = min_val + 1
-
-                gray_normalized = ((current_ir_raw - min_val) / (max_val - min_val) * 255).astype(np.uint8)
-
-                # --- NEW: Calculate Centroid instead of single max pixel location ---
-                # Threshold the image to isolate the top 20% hottest pixels
-                _, thresh = cv2.threshold(gray_normalized, 200, 255, cv2.THRESH_BINARY)
-                M = cv2.moments(thresh)
-
-                if M["m00"] != 0:
-                    # Calculate stable center of mass
-                    orig_x = M["m10"] / M["m00"]
-                    orig_y = M["m01"] / M["m00"]
+                current_ir_raw = self.ir_raw_frames[index]
+                h, w = current_ir_raw.shape
+                # Display geometry
+                box_w, box_h = 256, 256
+                target_w = 256
+                target_h = 192
+                x_offset = 0
+                y_offset = (box_h - target_h) // 2
+                scale_x = target_w / w
+                scale_y = target_h / h
+                # 4. Normalize raw image for display
+                min_val = current_ir_raw.min()
+                max_val = current_ir_raw.max()
+                norm = max(max_val - min_val, 1)
+                gray_normalized = (
+                    (current_ir_raw - min_val) / norm * 255
+                ).astype(np.uint8)
+                # 5. Upscale to the SAME size shown in the GUI (256x192)
+                display_gray = cv2.resize(
+                    gray_normalized,
+                    (target_w, target_h),
+                    interpolation=cv2.INTER_CUBIC      
+                )
+                # 6. Detect hot region on displayed image
+                _, thresh = cv2.threshold(
+                    display_gray,
+                    0,
+                    255,
+                    cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                )
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+                contours, _ = cv2.findContours(
+                    thresh,
+                    cv2.RETR_EXTERNAL,
+                    cv2.CHAIN_APPROX_SIMPLE
+                )
+                if contours:
+                    largest = max(contours, key=cv2.contourArea)
+                    (center_x, center_y), radius = cv2.minEnclosingCircle(largest)
                 else:
-                    # Fallback to max_loc if threshold returns an empty mask
-                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(current_ir_raw)
-                    orig_x, orig_y = max_loc
-
-                h, w = gray_normalized.shape
-                q_img_gray = QImage(gray_normalized.data, w, h, w, QImage.Format_Grayscale8).copy()
-
-                # Scale the image keeping aspect ratio
-                ir_gray_pixmap = QPixmap.fromImage(q_img_gray).scaled(256, 256, Qt.KeepAspectRatio, Qt.FastTransformation)
-
-                actual_w = ir_gray_pixmap.width()   # 256
-                actual_h = ir_gray_pixmap.height()  # 192
-
-                scale_x = actual_w / w
-                scale_y = actual_h / h
-
-                # Float values from centroid preserve precision beautifully during upscaling
-                center_x = int((orig_x + 0.5) * scale_x)
-                center_y = int((orig_y + 0.5) * scale_y)
-                radius = int(1.5 * scale_x)
-
-                # Draw circle on the pixmap
-                painter = QPainter(ir_gray_pixmap)
+                    _, _, _, max_loc = cv2.minMaxLoc(display_gray)
+                    center_x = max_loc[0]
+                    center_y = max_loc[1]
+                    radius = 10
+                # Convert to integers
+                center_x = int(center_x)
+                center_y = int(center_y) + y_offset
+                radius = int(radius)
+                # 7. Create display pixmap
+                full_pixmap = QPixmap(box_w, box_h)
+                full_pixmap.fill(Qt.black)
+                q_img = QImage(
+                    display_gray.data,
+                    target_w,
+                    target_h,
+                    target_w,
+                    QImage.Format_Grayscale8
+                ).copy()
+                scaled_content = QPixmap.fromImage(q_img)
+                painter = QPainter(full_pixmap)
                 painter.setRenderHint(QPainter.Antialiasing)
-                painter.setPen(QPen(QColor(255, 0, 0), 2))
-                painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
+                painter.drawPixmap(x_offset, y_offset, scaled_content)
+                painter.setPen(QPen(Qt.red, 2))
+                painter.drawEllipse(
+                    QPoint(center_x, center_y),
+                    radius,
+                    radius
+                )
                 painter.end()
-
-                self.ir_gray_view.setPixmap(ir_gray_pixmap)
-                
-                ## avg temperature inside circle
-                mask = np.zeros((12, 16), dtype=np.uint8)
-                cv2.circle(mask, (int(orig_x + 0.5), int(orig_y + 0.5)), 2, 255, -1)
-                mean_raw_val = cv2.mean(current_ir_raw.astype(np.float32), mask=mask)[0]
-                temp_celsius = (mean_raw_val / 100.0) - 40
-                self.lbl_temp_avg_text.setText(f"circle\ntemperature\n{temp_celsius:.1f} °C")
-
+                self.ir_gray_view.setPixmap(full_pixmap)
+                # 8. Compute average temperature
+                orig_x = center_x / scale_x
+                orig_y = (center_y - y_offset) / scale_y
+                radius_raw = radius / scale_x
+                mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.circle(
+                    mask,
+                    (int(orig_x), int(orig_y)),
+                    max(1, int(radius_raw)),
+                    255,
+                    -1
+                )
+                mean_raw = cv2.mean(
+                    current_ir_raw.astype(np.float32),
+                    mask=mask
+                )[0]
+                temp_celsius = mean_raw / 100.0 - 40.0
+                self.lbl_temp_avg_text.setText(
+                    f"circle\ntemperature\n{temp_celsius:.1f} °C"
+                )
         # Update plotting timelines
         for plot_widget in self.mini_plots.values():
             plot_widget.set_current_index(index)
