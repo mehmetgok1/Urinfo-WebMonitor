@@ -284,7 +284,7 @@ class DataLoaderThread(QThread):
                     )
                     if circles is not None:
                         circles = np.uint16(np.around(circles))
-                        best_circle = circles[0, np.argmax(circles[0, :, 2])]
+                        best_circle = circles[0, 0]
                         mask = np.zeros((64, 64), dtype=np.uint8)
                         cv2.circle(mask, (int(best_circle[0]), int(best_circle[1])), int(best_circle[2]), 255, -1)
                         mean_val = cv2.mean(img_rgb, mask=mask)
@@ -659,7 +659,6 @@ class StoredDataScreen(QWidget):
                 painter.end()
 
            # --- Poo Detection ---
-            
             # FIX 1: Reduce the blur. Because the image is pixelated, a heavy blur 
             # will destroy the small features. We use a gentle 3x3 blur here.
             gray_for_thresh = cv2.GaussianBlur(gray_filtered, (3, 3), 0)
