@@ -241,6 +241,10 @@ class DeviceDialog(QDialog):
 
 class CameraWidget(QLabel):
     """Display camera feed as pixmap"""
+    
+    # Custom signal to emit calculated temperature
+    temperature_computed = pyqtSignal(float)
+    
     def __init__(self, width, height, is_rgb=True):
         super().__init__()
         self.width = width
@@ -274,6 +278,13 @@ class CameraWidget(QLabel):
         raw_values = np.frombuffer(self.raw_bytes, dtype=np.uint16)
         if len(raw_values) == 0:
             return
+
+        # --- Calculate and Emit Temperature ---
+        avg_raw = np.mean(raw_values)
+        temp_c = (float(avg_raw) / 100.0) - 40.0
+        self.temperature_computed.emit(temp_c)
+        # --------------------------------------
+
         minVal, maxVal = raw_values.min(), raw_values.max()
         if maxVal == minVal:
             maxVal = minVal + 1
@@ -390,8 +401,10 @@ class RealTimeScreen(QWidget):
         super().__init__()
         self.ble_thread = None
         self.is_connected = False
+        
+        # Added 'Temp' to the end of the first row to balance to a 2x5 grid
         self.sensor_values = {
-            'Battery': '--', 'Lux': '--', 'Ambient-I': '--', 'PIR': '--',
+            'Battery': '--', 'Lux': '--', 'Ambient-I': '--', 'PIR': '--', 'Temp': '--',
             'M-Dist': '--', 'M-Enrg': '--', 'S-Dist': '--', 'S-Enrg': '--', 'Detect': '--'
         }
         self.init_ui()
@@ -450,17 +463,19 @@ class RealTimeScreen(QWidget):
         camera_panel = self.create_camera_panel()
         main_layout.addWidget(camera_panel)
         
-        # Charts (Lux & PIR)
+        # Charts (Lux, PIR, and newly added Temp)
         self.chart_label = QLabel("📊 Sensor Charts")
         self.chart_label.setStyleSheet("font-size: 11px; color: #8b949e; text-transform: uppercase;")
         main_layout.addWidget(self.chart_label)
         
         self.lux_chart = SimpleChartWidget("Lux", "#ffcc00")
         self.pir_chart = SimpleChartWidget("PIR", "#58a6ff")
+        self.temp_chart = SimpleChartWidget("Temp (°C)", "#ff5555") # Initialize temp chart
         
         charts_layout = QHBoxLayout()
         charts_layout.addWidget(self.lux_chart)
         charts_layout.addWidget(self.pir_chart)
+        charts_layout.addWidget(self.temp_chart)
         main_layout.addLayout(charts_layout)
         
         # Log Area
@@ -614,7 +629,11 @@ class RealTimeScreen(QWidget):
         ir_group = QVBoxLayout()
         ir_title = QLabel("ir 16*12 at 1second")
         ir_title.setStyleSheet("font-size: 10px; color: #8b949e; text-transform: uppercase;")
+        
         self.ir_canvas = CameraWidget(16, 12, is_rgb=False)
+        # Connect the IR Camera's custom signal to update our UI
+        self.ir_canvas.temperature_computed.connect(lambda t: self.update_sensor_value('Temp', f"{t:.1f}"))
+        
         ir_group.addWidget(ir_title)
         ir_group.addWidget(self.ir_canvas)
         ir_group.setAlignment(self.ir_canvas, Qt.AlignCenter)
@@ -666,6 +685,11 @@ class RealTimeScreen(QWidget):
         elif sensor_name == 'PIR':
             try:
                 self.pir_chart.add_value(float(value_str))
+            except ValueError:
+                pass
+        elif sensor_name == 'Temp': # Feed the new temperature chart
+            try:
+                self.temp_chart.add_value(float(value_str))
             except ValueError:
                 pass
                 
