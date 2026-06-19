@@ -689,7 +689,8 @@ class StoredDataScreen(QWidget):
                 # Apply the mask to the thresholded image
                 thresh = cv2.bitwise_and(thresh, mask)
             else:
-                thresh = np.zeros_like(gray_for_thresh)
+                #thresh = np.zeros_like(gray_for_thresh)
+                pass
 
             # FIX 3: Group the pellets. Use MORPH_CLOSE to connect nearby shapes.
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
