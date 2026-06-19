@@ -430,6 +430,44 @@ class StoredDataScreen(QWidget):
         rgb_vbox.addWidget(self.rgb_view)
         rgb_gray_vbox.addWidget(rgb_gray_lbl)
         rgb_gray_vbox.addWidget(self.rgb_gray_view)
+        
+        
+        # --- The Vertical Color Palette ---
+        palette_vbox = QVBoxLayout()
+        spacer_lbl1 = QLabel("") 
+        palette_vbox.addWidget(spacer_lbl1)
+        self.palette_label = QLabel()
+        self.palette_label.setFixedSize(20, 256) # 20px wide, 256px high (matches your video)
+        self.palette_label.setStyleSheet("""
+            border: 1px solid #30363d;
+            background: qlineargradient(x1:0, y1:1, x2:0, y2:0, 
+                stop:0.0 #00007F,   /* 20C: Dark Blue */
+                stop:0.125 #0000FF, /* ~24C: Blue */
+                stop:0.375 #00FFFF, /* ~31C: Cyan */
+                stop:0.5 #00FF00,   /* 35C: Green */
+                stop:0.625 #FFFF00, /* ~39C: Yellow */
+                stop:0.875 #FF0000, /* ~46C: Red */
+                stop:1.0 #7F0000);  /* 50C: Dark Red */
+        """)
+        palette_vbox.addWidget(self.palette_label)
+        labels_vbox = QVBoxLayout()
+        spacer_lbl2 = QLabel("") # Matches the title spacer above
+        labels_vbox.addWidget(spacer_lbl2)
+        labels_container = QWidget()
+        labels_container.setFixedSize(45, 256)
+        labels_inner_vbox = QVBoxLayout(labels_container)
+        labels_inner_vbox.setContentsMargins(0, 0, 0, 0)
+        # Create the text labels
+        max_lbl = QLabel(f"{MAX_TEMP:.1f}°C")
+        mid_lbl = QLabel(f"{(MAX_TEMP + MIN_TEMP) / 2:.1f}°C")
+        min_lbl = QLabel(f"{MIN_TEMP:.1f}°C")
+        # Add them with stretches in between to push them to the top, center, and bottom
+        labels_inner_vbox.addWidget(max_lbl, alignment=Qt.AlignTop)
+        labels_inner_vbox.addStretch()
+        labels_inner_vbox.addWidget(mid_lbl, alignment=Qt.AlignVCenter)
+        labels_inner_vbox.addStretch()
+        labels_inner_vbox.addWidget(min_lbl, alignment=Qt.AlignBottom)
+        labels_vbox.addWidget(labels_container)
         # IR Square
         ir_vbox = QVBoxLayout()
         ir_lbl = QLabel("Thermal IR Video")
@@ -465,7 +503,11 @@ class StoredDataScreen(QWidget):
         video_layout.addSpacing(15)
         video_layout.addLayout(rgb_vbox)
         video_layout.addLayout(rgb_gray_vbox)
-        video_layout.addSpacing(40)
+        video_layout.addSpacing(15)
+        video_layout.addLayout(palette_vbox)
+        video_layout.addSpacing(15)
+        video_layout.addLayout(labels_vbox)
+        video_layout.addSpacing(15)
         video_layout.addLayout(ir_vbox)
         video_layout.addLayout(ir_gray_vbox)
         video_layout.addLayout(temperature_vbox)
