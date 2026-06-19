@@ -609,26 +609,24 @@ class StoredDataScreen(QWidget):
             img = self.rgb_frames[index]
             ir_img = self.ir_frames[index]
             
-            # Use explicit centered targets or uniform scaling structures
             rgb_pix = QPixmap.fromImage(img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             ir_pix = QPixmap.fromImage(ir_img).scaled(256, 256, Qt.KeepAspectRatio, Qt.FastTransformation)
             self.rgb_view.setPixmap(rgb_pix)
             self.ir_view.setPixmap(ir_pix) 
-
-            # --- Detect and draw circle for rgb gray --- 
-            # Safe, fast native Qt conversion to avoid raw memory pointer corruption
+            
+            # --- Convert to Grayscale & Filter --- 
             rgb_gray_img = img.convertToFormat(QImage.Format_Grayscale8)
             h_rgb, w_rgb = rgb_gray_img.height(), rgb_gray_img.width()
             
-            # Extract bytes safely to NumPy for circle fitting processing
             ptr = rgb_gray_img.bits()
             ptr.setsize(rgb_gray_img.byteCount())
             gray = np.array(ptr, copy=False).reshape((h_rgb, w_rgb))
-            
             gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75)
             gray_blurred = cv2.GaussianBlur(gray_filtered, (7, 7), 1.5)
             
             rgb_gray_pixmap = QPixmap.fromImage(rgb_gray_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            
+            best_circle = None
             
             circles = cv2.HoughCircles(
                 gray_blurred, 
@@ -638,26 +636,93 @@ class StoredDataScreen(QWidget):
                 param1=70, 
                 param2=20, 
                 minRadius=8, 
-                maxRadius=50
+                maxRadius=50 # Note: Ensure 50 is big enough for your raw image resolution
             )
 
+            # Draw red container circle if found
             if circles is not None:
                 circles = np.uint16(np.around(circles))
+                # FIX 1: Pick the circle with the highest confidence (the first one)
+                best_circle = circles[0, 0] 
+                
                 painter = QPainter(rgb_gray_pixmap)
                 painter.setRenderHint(QPainter.Antialiasing)
                 painter.setPen(QPen(QColor(255, 0, 0), 2))
                 
-                # Dynamically match visual space size
                 scale_x = rgb_gray_pixmap.width() / w_rgb
                 scale_y = rgb_gray_pixmap.height() / h_rgb
                 
-                best_circle = circles[0, np.argmax(circles[0, :, 2])]
                 center_x = int(best_circle[0] * scale_x)
                 center_y = int(best_circle[1] * scale_y)
                 radius = int(best_circle[2] * scale_x)
                 painter.drawEllipse(center_x - radius, center_y - radius, radius * 2, radius * 2)
                 painter.end()
 
+           # --- Poo Detection ---
+            
+            # FIX 1: Reduce the blur. Because the image is pixelated, a heavy blur 
+            # will destroy the small features. We use a gentle 3x3 blur here.
+            gray_for_thresh = cv2.GaussianBlur(gray_filtered, (3, 3), 0)
+
+            # FIX 2: Adaptive Thresholding. 
+            # This looks for local dark spots rather than trying to split the whole image.
+            # 15 is the block size (neighborhood), 6 is how much darker it needs to be than the background.
+            thresh = cv2.adaptiveThreshold(
+                gray_for_thresh, 
+                255, 
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                cv2.THRESH_BINARY_INV, 
+                15, 
+                6 
+            )
+            
+            # Mask out everything outside the red circle so we don't pick up the outer cup edges
+            if best_circle is not None:
+                mask = np.zeros_like(gray_for_thresh)
+                c_x, c_y, c_r = best_circle[0], best_circle[1], best_circle[2]
+                
+                # Draw a filled white circle on the black mask.
+                # Notice we subtract 4 from the radius (int(c_r) - 4) to shrink the mask slightly 
+                # so it doesn't accidentally catch the dark inner shadow of the cup wall.
+                cv2.circle(mask, (int(c_x), int(c_y)), int(c_r) - 4, 255, -1)
+                
+                # Apply the mask to the thresholded image
+                thresh = cv2.bitwise_and(thresh, mask)
+            else:
+                thresh = np.zeros_like(gray_for_thresh)
+
+            # FIX 3: Group the pellets. Use MORPH_CLOSE to connect nearby shapes.
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+            
+            # Find the contours on the newly thresholded image
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # --- Drawing the Contours ---
+            gray_painter = QPainter(rgb_gray_pixmap)
+            gray_painter.setRenderHint(QPainter.Antialiasing)
+            blue_pen = QPen(QColor(0, 120, 255), 2)
+            gray_painter.setPen(blue_pen)
+            
+            scale_x = rgb_gray_pixmap.width() / w_rgb
+            scale_y = rgb_gray_pixmap.height() / h_rgb
+            
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                
+                # Filter out microscopic noise (area > 3) but catch the contiguous blocks
+                if area > 3: 
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    
+                    # Scale coordinates to visual space (256x256)
+                    bx = int(x * scale_x)
+                    by = int(y * scale_y)
+                    bw = int(w * scale_x)
+                    bh = int(h * scale_y)
+                    
+                    gray_painter.drawRoundedRect(bx, by, bw, bh, 3, 3)
+
+            gray_painter.end()
             self.rgb_gray_view.setPixmap(rgb_gray_pixmap)
 
             # --- Fetch precalculated average color inside circle ---
