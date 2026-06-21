@@ -714,8 +714,8 @@ class StoredDataScreen(QWidget):
                 255, 
                 cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                 cv2.THRESH_BINARY_INV, 
-                21, 
-                6 
+                25, 
+                6 # threshhold offset
             )
             ## Mask out everything outside the red circle so we don't pick up the outer cup edges
             if best_circle is not None:
@@ -728,7 +728,7 @@ class StoredDataScreen(QWidget):
                 #thresh = np.zeros_like(gray_for_thresh)
                 pass
             # FIX 3: Group the pellets. Use MORPH_CLOSE to connect nearby shapes.
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (8, 8))
             thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
             
             # Find the contours on the newly thresholded image
