@@ -661,15 +661,15 @@ class StoredDataScreen(QWidget):
             self.rgb_view.setPixmap(rgb_pix)
             self.ir_view.setPixmap(ir_pix) 
             
-            # --- Convert to Grayscale & Filter --- 
+            # --- Convert RGB to Grayscale & Filter --- 
             rgb_gray_img = img.convertToFormat(QImage.Format_Grayscale8)
             h_rgb, w_rgb = rgb_gray_img.height(), rgb_gray_img.width()
             
-            ptr = rgb_gray_img.bits()
+            ptr = rgb_gray_img.bits() #pointer to the raw data
             ptr.setsize(rgb_gray_img.byteCount())
-            gray = np.array(ptr, copy=False).reshape((h_rgb, w_rgb))
-            gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75)
-            gray_blurred = cv2.GaussianBlur(gray_filtered, (7, 7), 1.5)
+            gray = np.array(ptr, copy=False).reshape((h_rgb, w_rgb)) #one byte reshape
+            gray_filtered = cv2.bilateralFilter(gray, 9, 75, 75) # d value and sigma values can be tuned for your specific images
+            gray_blurred = cv2.GaussianBlur(gray_filtered, (3, 3), 2) #sigma 1.5 can be increased for more blur if needed
             
             rgb_gray_pixmap = QPixmap.fromImage(rgb_gray_img).scaled(256, 256, Qt.IgnoreAspectRatio, Qt.FastTransformation)
             
@@ -678,12 +678,12 @@ class StoredDataScreen(QWidget):
             circles = cv2.HoughCircles(
                 gray_blurred, 
                 cv2.HOUGH_GRADIENT, 
-                dp=1.0, 
-                minDist=30,
-                param1=70, 
-                param2=20, 
-                minRadius=8, 
-                maxRadius=50 # Note: Ensure 50 is big enough for your raw image resolution
+                dp=1.0, #downsample size (for every 1 pixel in the output, how many pixels to skip in the input)
+                minDist=15, #minimum distance between detected circles
+                param1=70, #upper threshold for the internal Canny edge detector 
+                param2=15, #threshold for center detection (lower = more circles, higher = fewer circles) 
+                minRadius=28, # Note: Ensure 28 is small enough for your raw image resolution                                                                                           
+                maxRadius=36 # Note: Ensure 36 is big enough for your raw image resolution
             )
 
             # Draw red container circle if found
@@ -706,38 +706,27 @@ class StoredDataScreen(QWidget):
                 painter.end()
 
            # --- Poo Detection ---
-            # FIX 1: Reduce the blur. Because the image is pixelated, a heavy blur 
-            # will destroy the small features. We use a gentle 3x3 blur here.
-            gray_for_thresh = cv2.GaussianBlur(gray_filtered, (3, 3), 0)
-
+            # small kernel.  
+            gray_for_thresh = cv2.GaussianBlur(gray_filtered, (3, 3), 1.5)
             # FIX 2: Adaptive Thresholding. 
-            # This looks for local dark spots rather than trying to split the whole image.
-            # 15 is the block size (neighborhood), 6 is how much darker it needs to be than the background.
             thresh = cv2.adaptiveThreshold(
                 gray_for_thresh, 
                 255, 
                 cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                 cv2.THRESH_BINARY_INV, 
-                15, 
+                21, 
                 6 
             )
-            
-            # Mask out everything outside the red circle so we don't pick up the outer cup edges
+            ## Mask out everything outside the red circle so we don't pick up the outer cup edges
             if best_circle is not None:
                 mask = np.zeros_like(gray_for_thresh)
                 c_x, c_y, c_r = best_circle[0], best_circle[1], best_circle[2]
-                
-                # Draw a filled white circle on the black mask.
-                # Notice we subtract 4 from the radius (int(c_r) - 4) to shrink the mask slightly 
-                # so it doesn't accidentally catch the dark inner shadow of the cup wall.
                 cv2.circle(mask, (int(c_x), int(c_y)), int(c_r) - 4, 255, -1)
-                
                 # Apply the mask to the thresholded image
                 thresh = cv2.bitwise_and(thresh, mask)
             else:
                 #thresh = np.zeros_like(gray_for_thresh)
                 pass
-
             # FIX 3: Group the pellets. Use MORPH_CLOSE to connect nearby shapes.
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
             thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
