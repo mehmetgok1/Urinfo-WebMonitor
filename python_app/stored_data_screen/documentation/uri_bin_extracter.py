@@ -52,7 +52,11 @@ motion_csv_path = os.path.join(dirs["motion_audio"], "accel_mic_stream.csv")
 
 print(f"Oturum işleniyor: {session_id}")
 
-bin_files = sorted([f for f in os.listdir(session_path) if f.endswith(".bin")])
+# Dosyaları alfabetik olarak değil, içerdikleri sayısal değere göre (part_0, part_50, part_100) sırala
+bin_files = sorted(
+    [f for f in os.listdir(session_path) if f.endswith(".bin")],
+    key=lambda f: int(f.split('_part_')[1].split('.')[0])
+)
 
 # Küresel sequence takibi (Dosyalar arası süreklilik varsa)
 last_sequence = None 
@@ -116,7 +120,7 @@ with open(sensor_csv_path, 'w', newline='') as f_sensor, \
             
             # --- SEQUENCE VE EKSİK PAKET KONTROLÜ ---
             if last_sequence is not None:
-                expected_seq = (last_sequence + 1) % 65536
+                expected_seq = (int(last_sequence) + 1) % 65536
                 if seq != expected_seq:
                     print(f"  [BİLGİ] Veri atlaması (Paket düştü). Beklenen Seq: {expected_seq}, Gelen: {seq}")
             
