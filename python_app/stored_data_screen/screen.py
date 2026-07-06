@@ -62,10 +62,10 @@ combined_packet_dtype = np.dtype([
     ('gyroX', 'i2'), ('gyroY', 'i2'), ('gyroZ', 'i2'),
     ('timestamp_ms', 'u4'), ('status', 'u1'),
     ('accelSampleCount', 'u2'),
-    ('accelX_samples', 'i2', (2000,)), 
-    ('accelY_samples', 'i2', (2000,)),
-    ('accelZ_samples', 'i2', (2000,)),
-    ('microphoneSamples', 'u2', (2000,)),
+    ('accelX_samples', 'i2', (400,)), 
+    ('accelY_samples', 'i2', (400,)),
+    ('accelZ_samples', 'i2', (400,)),
+    ('microphoneSamples', 'u2', (400,)),
     ('rgbFrame', 'u2', (4096,)), 
     ('irFrame', 'u2', (192,))
 ])
@@ -234,7 +234,7 @@ class DataLoaderThread(QThread):
                     sample_count = packet['accelSampleCount']
                     
                     is_valid = True
-                    if sample_count != 2000: is_valid = False
+                    if sample_count != 400: is_valid = False
                     if not (0.0 <= bat <= 100.0): is_valid = False
                     if not (-40.0 <= temp <= 125.0): is_valid = False
 
@@ -893,9 +893,9 @@ class StoredDataScreen(QWidget):
             return
             
         try:
-            import matplotlib.pyplot as plt
-            start_idx = self.current_frame * 2000
-            end_idx = start_idx + 2000
+            import matplotlib.pyplot as plt # 200ms of data at 2kHz is 400 samples
+            start_idx = self.current_frame * 400
+            end_idx = start_idx + 400
             chunk = self.audio_data[start_idx:end_idx]
             
             # Remove DC offset for clearer FFT
