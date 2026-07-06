@@ -24,10 +24,10 @@ combined_packet_dtype = np.dtype([
     ('timestamp_ms', 'u4'),
     ('status', 'u1'),
     ('accelSampleCount', 'u2'),
-    ('accelX_samples', 'i2', (2000,)), 
-    ('accelY_samples', 'i2', (2000,)),
-    ('accelZ_samples', 'i2', (2000,)),
-    ('microphoneSamples', 'u2', (2000,)),
+    ('accelX_samples', 'i2', (400,)), 
+    ('accelY_samples', 'i2', (400,)),
+    ('accelZ_samples', 'i2', (400,)),
+    ('microphoneSamples', 'u2', (400,)),
     ('rgbFrame', 'u2', (4096,)),  # 64x64
     ('irFrame', 'u2', (192,))     # 16x12
 ])
@@ -35,7 +35,7 @@ combined_packet_dtype = np.dtype([
 PACKET_SIZE = combined_packet_dtype.itemsize # 24633 bytes
 
 # AYARLAR
-session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/"
+session_path = "/media/deso/disk/20260706_233206/"
 session_id = os.path.basename(session_path)
 output_base = os.path.join("./processed_sessions", session_id)
 
@@ -92,16 +92,16 @@ with open(sensor_csv_path, 'w', newline='') as f_sensor, \
 
             # --- SANITY CHECK (GÜVENİLİRLİK VE HİZALAMA KONTROLÜ) ---
             is_valid = True
-            if sample_count != 2000: is_valid = False
+            if sample_count != 400: is_valid = False
             if not (0.0 <= bat <= 100.0): is_valid = False
             if not (-40.0 <= temp <= 125.0): is_valid = False
             
             if not is_valid:
                 print(f"  [KAYIP/BOZULMA] Senkronizasyon bozuldu! (Offset: {pointer}). Kurtarılıyor...")
                 recovered = False
-                # Byte byte ileri sararak yeni bir geçerli paket başı ara (0xD0 0x07 = 2000 @ offset 55)
+                # Byte byte ileri sararak yeni bir geçerli paket başı ara (0x90 0x01 = 400 @ offset 55)
                 for scan_ptr in range(pointer + 1, len(file_bytes) - PACKET_SIZE):
-                    if file_bytes[scan_ptr+55] == 0xD0 and file_bytes[scan_ptr+56] == 0x07:
+                    if file_bytes[scan_ptr+55] == 0x90 and file_bytes[scan_ptr+56] == 0x01:
                         test_packet = np.frombuffer(file_bytes[scan_ptr:scan_ptr+PACKET_SIZE], dtype=combined_packet_dtype)[0]
                         if (0.0 <= test_packet['batteryPercentage'] <= 100.0) and (-40.0 <= test_packet['temperature'] <= 125.0):
                             print(f"  [BAŞARILI] {scan_ptr - pointer} byte atlanarak senkronizasyon sağlandı! Yeni Seq: {test_packet['sequence']}")
@@ -129,7 +129,7 @@ with open(sensor_csv_path, 'w', newline='') as f_sensor, \
                                packet['humidity'], packet['ambientLight_slave']])
 
             # --- B. ACCEL & MIC (CSV) ---
-            for j in range(2000):
+            for j in range(400):
                 writer_m.writerow([ts, packet['accelX_samples'][j], packet['accelY_samples'][j], 
                                    packet['accelZ_samples'][j], packet['microphoneSamples'][j]])
 

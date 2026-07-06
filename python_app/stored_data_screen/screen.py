@@ -241,7 +241,7 @@ class DataLoaderThread(QThread):
                     if not is_valid:
                         recovered = False
                         for scan_ptr in range(pointer + 1, len(file_bytes) - PACKET_SIZE):
-                            if file_bytes[scan_ptr+55] == 0xD0 and file_bytes[scan_ptr+56] == 0x07:
+                            if file_bytes[scan_ptr+55] == 0x90 and file_bytes[scan_ptr+56] == 0x01:
                                 t_packet = np.frombuffer(file_bytes[scan_ptr:scan_ptr+PACKET_SIZE], dtype=combined_packet_dtype)[0]
                                 if (0.0 <= t_packet['batteryPercentage'] <= 100.0) and (-40.0 <= t_packet['temperature'] <= 125.0):
                                     skipped_in_file += (scan_ptr - pointer)

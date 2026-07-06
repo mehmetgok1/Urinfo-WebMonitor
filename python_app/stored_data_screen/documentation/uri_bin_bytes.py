@@ -22,10 +22,10 @@ combined_packet_dtype = np.dtype([
     ('timestamp_ms', 'u4'),
     ('status', 'u1'),
     ('accelSampleCount', 'u2'),
-    ('accelX_samples', 'i2', (2000,)), 
-    ('accelY_samples', 'i2', (2000,)),
-    ('accelZ_samples', 'i2', (2000,)),
-    ('microphoneSamples', 'u2', (2000,)),
+    ('accelX_samples', 'i2', (400,)), 
+    ('accelY_samples', 'i2', (400,)),
+    ('accelZ_samples', 'i2', (400,)),
+    ('microphoneSamples', 'u2', (400,)),
     ('rgbFrame', 'u2', (4096,)),  
     ('irFrame', 'u2', (192,))     
 ])
@@ -35,7 +35,7 @@ PACKET_SIZE = combined_packet_dtype.itemsize # 24633 bytes
 # Calculate internal byte offsets for the report header
 offsets = {name: combined_packet_dtype.fields[name][1] for name in combined_packet_dtype.names}
 
-session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/"
+session_path = "/media/deso/disk/20260706_233206/"
 report_path = "./packet_boundary_report.txt"
 
 bin_files = sorted([f for f in os.listdir(session_path) if f.endswith(".bin")])
@@ -73,7 +73,7 @@ with open(report_path, 'w', encoding='utf-8') as report:
             sample_count = packet['accelSampleCount']
             
             is_valid = True
-            if sample_count != 2000: is_valid = False
+            if sample_count != 400: is_valid = False
             if not (0.0 <= bat <= 100.0): is_valid = False
             if not (-40.0 <= temp <= 125.0): is_valid = False
 
@@ -83,7 +83,7 @@ with open(report_path, 'w', encoding='utf-8') as report:
                 
                 recovered = False
                 for scan_ptr in range(pointer + 1, len(file_bytes) - PACKET_SIZE):
-                    if file_bytes[scan_ptr+55] == 0xD0 and file_bytes[scan_ptr+56] == 0x07:
+                    if file_bytes[scan_ptr+55] == 0x90 and file_bytes[scan_ptr+56] == 0x01:
                         t_packet = np.frombuffer(file_bytes[scan_ptr:scan_ptr+PACKET_SIZE], dtype=combined_packet_dtype)[0]
                         if (0.0 <= t_packet['batteryPercentage'] <= 100.0) and (-40.0 <= t_packet['temperature'] <= 125.0):
                             report.write(f"  [✅ RECOVERED] Skipped {scan_ptr - pointer} broken bytes. Found valid packet at offset {scan_ptr} (Seq: {t_packet['sequence']}).\n")
@@ -104,8 +104,8 @@ with open(report_path, 'w', encoding='utf-8') as report:
             report.write(f"  ├── [Offset {offsets['batteryPercentage']:4d}] battery_pct:  {bat:.2f}%\n")
             report.write(f"  ├── [Offset {offsets['temperature']:4d}] temperature:  {temp:.2f} °C\n")
             report.write(f"  ├── [Offset {offsets['humidity']:4d}] humidity:     {packet['humidity']:.2f}%\n")
-            report.write(f"  ├── [Offset {offsets['accelX_samples']:4d}] Accel Arrays:  Starts here (2000 samples x 3 axes)\n")
-            report.write(f"  ├── [Offset {offsets['microphoneSamples']:4d}] Mic Array:    Starts here (2000 samples)\n")
+            report.write(f"  ├── [Offset {offsets['accelX_samples']:4d}] Accel Arrays:  Starts here (400 samples x 3 axes)\n")
+            report.write(f"  ├── [Offset {offsets['microphoneSamples']:4d}] Mic Array:    Starts here (400 samples)\n")
             report.write(f"  ├── [Offset {offsets['rgbFrame']:4d}] RGB Frame:    Starts here (4096 samples)\n")
             report.write(f"  └── [Offset {offsets['irFrame']:4d}] IR Frame:     Starts here (192 samples)\n")
             
