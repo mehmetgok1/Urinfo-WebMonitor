@@ -80,12 +80,22 @@ with open(report_path, 'w', encoding='utf-8') as report:
             if not is_valid:
                 report.write(f"[⚠️ CORRUPTION DETECTED] Lost sync at offset {pointer}.\n")
                 report.write(f"  Scanning byte-by-byte for next valid sequence frame...\n")
-                
                 recovered = False
                 for scan_ptr in range(pointer + 1, len(file_bytes) - PACKET_SIZE):
                     if file_bytes[scan_ptr+55] == 0x90 and file_bytes[scan_ptr+56] == 0x01:
                         t_packet = np.frombuffer(file_bytes[scan_ptr:scan_ptr+PACKET_SIZE], dtype=combined_packet_dtype)[0]
                         if (0.0 <= t_packet['batteryPercentage'] <= 100.0) and (-40.0 <= t_packet['temperature'] <= 125.0):
+                            if(scan_ptr - pointer ==11833):
+                                report.write(f"[PACKET {packet_count:03d}] FATAL NONVALID Alignment at File Offset: {pointer} to {pointer + scan_ptr} bytes\n")
+                                report.write(f"  ├── [Offset {offsets['sequence']:4d}] sequence:      {seq}\n")
+                                report.write(f"  ├── [Offset {offsets['timestamp_ms']:4d}] timestamp_ms:  {ts} ms\n")
+                                report.write(f"  ├── [Offset {offsets['batteryPercentage']:4d}] battery_pct:  {bat:.2f}%\n")
+                                report.write(f"  ├── [Offset {offsets['temperature']:4d}] temperature:  {temp:.2f} °C\n")
+                                report.write(f"  ├── [Offset {offsets['humidity']:4d}] humidity:     {packet['humidity']:.2f}%\n")
+                                report.write(f"  ├── [Offset {offsets['accelX_samples']:4d}] Accel Arrays:  Starts here (400 samples x 3 axes)\n")
+                                report.write(f"  ├── [Offset {offsets['microphoneSamples']:4d}] Mic Array:    Starts here (400 samples)\n")
+                                report.write(f"  ├── [Offset {offsets['rgbFrame']:4d}] RGB Frame:    Starts here (4096 samples)\n")
+                                report.write(f"  └── [Offset {offsets['irFrame']:4d}] IR Frame:     Starts here (192 samples)\n")
                             report.write(f"  [✅ RECOVERED] Skipped {scan_ptr - pointer} broken bytes. Found valid packet at offset {scan_ptr} (Seq: {t_packet['sequence']}).\n")
                             report.write("  " + "." * 60 + "\n")
                             pointer = scan_ptr

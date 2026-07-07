@@ -2518,6 +2518,16 @@ FILE: 20260706_233206_part_250.bin (Total Size: 591650 bytes)
   Scanning byte-by-byte for next valid sequence frame...
   [✅ RECOVERED] Skipped 11833 broken bytes. Found valid packet at offset 106497 (Seq: 259).
   ............................................................
+[PACKET 008] FATAL NONVALID Alignment at File Offset: 94664 to 201161 bytes
+  ├── [Offset   26] sequence:      258
+  ├── [Offset   50] timestamp_ms:  109313 ms
+  ├── [Offset    4] battery_pct:  100.00%
+  ├── [Offset   30] temperature:  -1395.46 °C
+  ├── [Offset   34] humidity:     33.56%
+  ├── [Offset   57] Accel Arrays:  Starts here (400 samples x 3 axes)
+  ├── [Offset 2457] Mic Array:    Starts here (400 samples)
+  ├── [Offset 3257] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 11449] IR Frame:     Starts here (192 samples)
 [PACKET 008] Valid Alignment at File Offset: 106497 to 118330 bytes
   ├── [Offset   26] sequence:      259
   ├── [Offset   50] timestamp_ms:  109513 ms
@@ -5066,6 +5076,16 @@ FILE: 20260706_233206_part_450.bin (Total Size: 591650 bytes)
   Scanning byte-by-byte for next valid sequence frame...
   [✅ RECOVERED] Skipped 11833 broken bytes. Found valid packet at offset 248493 (Seq: 471).
   ............................................................
+[PACKET 020] FATAL NONVALID Alignment at File Offset: 236660 to 485153 bytes
+  ├── [Offset   26] sequence:      1
+  ├── [Offset   50] timestamp_ms:  2416181250 ms
+  ├── [Offset    4] battery_pct:  100.00%
+  ├── [Offset   30] temperature:  13493273766276366336.00 °C
+  ├── [Offset   34] humidity:     nan%
+  ├── [Offset   57] Accel Arrays:  Starts here (400 samples x 3 axes)
+  ├── [Offset 2457] Mic Array:    Starts here (400 samples)
+  ├── [Offset 3257] RGB Frame:    Starts here (4096 samples)
+  └── [Offset 11449] IR Frame:     Starts here (192 samples)
 [PACKET 020] Valid Alignment at File Offset: 248493 to 260326 bytes
   ├── [Offset   26] sequence:      471
   ├── [Offset   50] timestamp_ms:  151913 ms
