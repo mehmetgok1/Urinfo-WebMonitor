@@ -5,3 +5,5 @@ build/
 dist/
 main.spec
 trial/
+stored_data_screen/documentation/denem_data
+stored_data_screen/documentation/packet_boundary_report.txt

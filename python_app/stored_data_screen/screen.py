@@ -535,7 +535,7 @@ class StoredDataScreen(QWidget):
             ('batteryPercentage', 'Battery (%)', '#39d353'),
             ('PIRValue', 'PIR Value', '#d2a8ff'),
             ('movingDist', 'Moving Dist (mm)', '#ffa657'),
-            ('ambLight', 'Ambient Light', '#f2cc60')
+            ('ambientLight_slave', 'Ambient Light (slave)', '#f2cc60')
         ]
         self.mini_plots = {}
         plots_layout = QGridLayout()

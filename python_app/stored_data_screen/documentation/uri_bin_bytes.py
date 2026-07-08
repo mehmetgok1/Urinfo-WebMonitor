@@ -35,7 +35,7 @@ PACKET_SIZE = combined_packet_dtype.itemsize # 24633 bytes
 # Calculate internal byte offsets for the report header
 offsets = {name: combined_packet_dtype.fields[name][1] for name in combined_packet_dtype.names}
 
-session_path = "/media/deso/disk/20260706_233206/"
+session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/20260708_190052"
 report_path = "./packet_boundary_report.txt"
 
 bin_files = sorted([f for f in os.listdir(session_path) if f.endswith(".bin")])
@@ -91,6 +91,7 @@ with open(report_path, 'w', encoding='utf-8') as report:
                                 report.write(f"  ├── [Offset {offsets['timestamp_ms']:4d}] timestamp_ms:  {ts} ms\n")
                                 report.write(f"  ├── [Offset {offsets['batteryPercentage']:4d}] battery_pct:  {bat:.2f}%\n")
                                 report.write(f"  ├── [Offset {offsets['temperature']:4d}] temperature:  {temp:.2f} °C\n")
+                                report.write(f"  ├── [Offset {offsets['temperature']:4d}] sample_count:  {sample_count}\n")
                                 report.write(f"  ├── [Offset {offsets['humidity']:4d}] humidity:     {packet['humidity']:.2f}%\n")
                                 report.write(f"  ├── [Offset {offsets['accelX_samples']:4d}] Accel Arrays:  Starts here (400 samples x 3 axes)\n")
                                 report.write(f"  ├── [Offset {offsets['microphoneSamples']:4d}] Mic Array:    Starts here (400 samples)\n")
