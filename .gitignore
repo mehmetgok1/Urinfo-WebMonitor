@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 srv_bin_data/
 docker_services/deneme_data/
+docker_services/
+python_app/stored_data_screen/documentation/packet_boundary_report.txt
