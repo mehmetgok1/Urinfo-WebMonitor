@@ -109,9 +109,18 @@
                 <div class="label">RGB Camera (16x16 downsampled)</div>
                 <canvas id="rgbCanvas" class="camera-view" width="16" height="16" style="width: 256px; height: 256px;"></canvas>
             </div>
+            
             <div style="text-align: center;">
                 <div class="label">IR Thermal (16x12)</div>
-                <canvas id="irCanvas" class="camera-view" width="16" height="12" style="width: 256px; height: 192px;"></canvas>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 5px;">
+                    <canvas id="irCanvas" class="camera-view" width="16" height="12" style="width: 256px; height: 192px; border: 1px solid #555;"></canvas>
+                    
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <div style="font-size: 11px; color: #ccc; margin-bottom: 2px;">50°C</div>
+                        <canvas id="irColorbar" width="10" height="100" style="width: 20px; height: 160px; border: 1px solid #555;"></canvas>
+                        <div style="font-size: 11px; color: #ccc; margin-top: 2px;">20°C</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -229,37 +238,87 @@
         }
         ctx.putImageData(imgData, 0, 0);
     }
+    function drawColorbar() {
+        const canvas = document.getElementById('irColorbar');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        const imgData = ctx.createImageData(width, height);
 
-    function getThermalColor(value, min, max) {
-        let t = (value - min) / (max - min);
-        if (t < 0) t = 0; if (t > 1) t = 1;
-        const r = Math.min(255, Math.max(0, 255 * (2.5 * t - 0.5)));
-        const g = Math.min(255, Math.max(0, 255 * (3 * t - 1.5)));
-        const b = Math.min(255, Math.max(0, 255 * (2 * Math.sin(Math.PI * t))));
-        return [r, g, b];
+        // Virtual limits matching your thermal display mapping range
+        const minTemp = 20.0;
+        const maxTemp = 50.0;
+
+        // Loop through every row of the colorbar canvas from top (0) to bottom (height)
+        for (let y = 0; y < height; y++) {
+            // Calculate the ratio: 0.0 at the top, 1.0 at the bottom
+            const ratio = y / (height - 1);
+            
+            // Map the ratio to temperature: Top is hottest (50), Bottom is coldest (20)
+            const currentTemp = maxTemp - ratio * (maxTemp - minTemp);
+            
+            // Get the color array [R, G, B] from your existing mapper function
+            const color = getThermalColor(currentTemp, minTemp, maxTemp);
+
+            // Fill the pixels for this entire row width
+            for (let x = 0; x < width; x++) {
+                const index = (y * width + x) * 4;
+                imgData.data[index]     = color[0]; // R
+                imgData.data[index + 1] = color[1]; // G
+                imgData.data[index + 2] = color[2]; // B
+                imgData.data[index + 3] = 255;      // Alpha
+            }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+    }
+
+    // Call this once on startup to draw the static reference scale
+    document.addEventListener("DOMContentLoaded", drawColorbar);
+
+    function getThermalColor(val, min, max) {
+        // 1. Clamp input value to range
+        if (val < min) val = min;
+        if (val > max) val = max;
+
+        // 2. Normalize to a 0.0 - 1.0 float
+        const v = (val - min) / (max - min);
+
+        // 3. Jet colormap smooth interpolation math
+        const r = Math.max(0, Math.min(255, Math.floor(255 * Math.min(4 * v - 1.5, -4 * v + 4.5))));
+        const g = Math.max(0, Math.min(255, Math.floor(255 * Math.min(4 * v - 0.5, -4 * v + 3.5))));
+        const b = Math.max(0, Math.min(255, Math.floor(255 * Math.min(4 * v + 0.5, -4 * v + 2.5))));
+
+        return [r, g, b]; // Returns strict [R, G, B]
     }
 
     function drawIRFrame() {
         const canvas = document.getElementById('irCanvas');
         const ctx = canvas.getContext('2d');
         const imgData = ctx.createImageData(16, 12);
-        let rawValues = new Uint16Array(192);
-        let minVal = 65535, maxVal = 0;
         
-        for (let i = 0; i < 192; i++) {
-            rawValues[i] = irBuffer[i * 2] | (irBuffer[i * 2 + 1] << 8);
-            if (rawValues[i] < minVal) minVal = rawValues[i];
-            if (rawValues[i] > maxVal) maxVal = rawValues[i];
-        }
-        if (maxVal === minVal) maxVal = minVal + 1;
+        // 1. Define your strict target temperature range in Celsius
+        const COLOR_MIN_CELSIUS = 25.0;
+        const COLOR_MAX_CELSIUS = 50.0;
 
         for (let i = 0; i < 192; i++) {
-            const color = getThermalColor(rawValues[i], minVal, maxVal);
-            imgData.data[i * 4]     = color[0];
-            imgData.data[i * 4 + 1] = color[1];
-            imgData.data[i * 4 + 2] = color[2];
-            imgData.data[i * 4 + 3] = 255;
+            // 2. Reconstruct the raw uint16 value from the incoming bytes
+            const rawUint16 = irBuffer[i * 2] | (irBuffer[i * 2 + 1] << 8);
+            
+            // 3. Inverse operation: Convert back to actual Celsius float
+            const celsius = (rawUint16 / 100.0) - 40.0;
+
+            // 4. Pass the real Celsius value and your absolute bounds to the color mapper
+            const color = getThermalColor(celsius, COLOR_MIN_CELSIUS, COLOR_MAX_CELSIUS);
+            
+            // 5. Populate the canvas pixel array
+            imgData.data[i * 4]     = color[0]; // R
+            imgData.data[i * 4 + 1] = color[1]; // G
+            imgData.data[i * 4 + 2] = color[2]; // B
+            imgData.data[i * 4 + 3] = 255;      // Alpha
         }
+        
         ctx.putImageData(imgData, 0, 0);
     }
     // ---------------------------------
