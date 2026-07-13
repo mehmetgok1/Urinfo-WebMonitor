@@ -65,10 +65,13 @@
             <input type="text" id="otaVersion" placeholder="Version (e.g. 1.0.1)">
             <input type="text" id="wifiName" placeholder="WiFi Name">
             <input type="password" id="wifiPass" placeholder="WiFi Password">
+            <input type="text" id="serverIP" placeholder="Server IP">
         </div>
         <div class="btn-row">
             <button onclick="sendStartWithLabel()">Start</button>
             <button id="btnStop" onclick="sendCommand('Com;Stop')">Stop</button>
+            <button onclick="sendWifiConfig()">Send WiFi</button>
+            <button onclick="sendCommand('Com;Stream')">Stream</button>
             <button id="btnOTA" onclick="sendOTA()">Start OTA</button>
         </div>
 
@@ -136,6 +139,7 @@
     const UUID_ACTION  = '11111111-1111-1111-2222-111111111116';
     const UUID_MMWAVE  = '11111111-1111-1111-2222-111111111115';
     const UUID_VERSION = '11111111-1111-1111-2222-111111111117';
+    const UUID_WIFISTREAM = '11111111-1111-1111-2222-111111111119';
     
     // Camera UUIDs
     const UUID_RGB = 'c2a969f6-16e9-4e08-99e7-5e6086f6a546';
@@ -204,6 +208,14 @@
         sendCommand(`Com;OTA;${ver};${ssid};${pass}`);
     }
     
+    function sendWifiConfig() {
+        const ssid = document.getElementById('wifiName').value;
+        const pass = document.getElementById('wifiPass').value;
+        const ip = document.getElementById('serverIP').value;
+        if (!ssid || !pass || !ip) { alert("WiFi SSID, Password, and Server IP are required!"); return; }
+        sendCommand(`Com;WiFi;${ssid};${pass};${ip}`);
+    }
+
     // ----- Camera Frame Handling -----
     function handleRGBChunk(event) {
         const value = event.target.value;
@@ -341,6 +353,15 @@
         });
     }
 
+    function handleStreamStatus(buf) {
+        const status = new TextDecoder().decode(buf).replace(/\x00/g, '').trim();
+        if (status === '1') {
+            log("WiFi stream in progress...");
+        } else if (status === '0') {
+            log("WiFi stream finished.");
+        }
+    }
+
     const chartConfig = (l, c) => ({
         type: 'line',
         data: { labels: [], datasets: [{ label: l, data: [], borderColor: c, tension: 0.3, fill: false, pointRadius: 0 }] },
@@ -409,6 +430,7 @@
                 await new Promise(r => setTimeout(r, 150)); 
             }
             await subscribeChar(service, 'mmWave', UUID_MMWAVE, handleMmwave);
+            await subscribeChar(service, 'wifiStream', UUID_WIFISTREAM, handleStreamStatus);
             
             // Subscribe to Camera Streams
             try {
