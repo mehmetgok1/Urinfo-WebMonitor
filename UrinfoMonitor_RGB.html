@@ -65,7 +65,6 @@
             <input type="text" id="otaVersion" placeholder="Version (e.g. 1.0.1)">
             <input type="text" id="wifiName" placeholder="WiFi Name">
             <input type="password" id="wifiPass" placeholder="WiFi Password">
-            <input type="text" id="serverIP" placeholder="Server IP">
         </div>
         <div class="btn-row">
             <button onclick="sendStartWithLabel()">Start</button>
@@ -211,9 +210,8 @@
     function sendWifiConfig() {
         const ssid = document.getElementById('wifiName').value;
         const pass = document.getElementById('wifiPass').value;
-        const ip = document.getElementById('serverIP').value;
-        if (!ssid || !pass || !ip) { alert("WiFi SSID, Password, and Server IP are required!"); return; }
-        sendCommand(`Com;WiFi;${ssid};${pass};${ip}`);
+        if (!ssid || !pass) { alert("WiFi SSID and Password are required!"); return; }
+        sendCommand(`Com;WiFi;${ssid};${pass}`);
     }
 
     // ----- Camera Frame Handling -----
