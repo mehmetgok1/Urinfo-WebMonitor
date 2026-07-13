@@ -78,6 +78,7 @@ UUID_MMWAVE      = "11111111-1111-1111-2222-111111111115"
 UUID_AMB_INT     = "11111111-1111-1111-2222-111111111118"
 UUID_RGB         = "c2a969f6-16e9-4e08-99e7-5e6086f6a546"
 UUID_IR          = "d3b969f6-16e9-4e08-99e7-5e6086f6a547"
+UUID_WIFISTREAM  = "11111111-1111-1111-2222-111111111119"
 
 
 class BleScannerThread(QThread):
@@ -103,6 +104,7 @@ class BleConnectionThread(QThread):
     mmwave_updated = pyqtSignal(str)
     rgb_chunk_received = pyqtSignal(bytearray)
     ir_chunk_received = pyqtSignal(bytearray)
+    stream_status_updated = pyqtSignal(str)
     
     def __init__(self, device):
         super().__init__()
@@ -141,6 +143,9 @@ class BleConnectionThread(QThread):
             
             try: await self.client.start_notify(UUID_IR, self.ir_handler)
             except Exception: pass
+
+            try: await self.client.start_notify(UUID_WIFISTREAM, self.stream_status_handler)
+            except Exception: self.log_msg.emit("Warning: Missing WIFISTREAM char")
             
             self.log_msg.emit("✓ Subscribed to streams.")
             
@@ -170,6 +175,10 @@ class BleConnectionThread(QThread):
         
     def ir_handler(self, sender, data):
         self.ir_chunk_received.emit(bytearray(data))
+
+    def stream_status_handler(self, sender, data):
+        val = data.decode('utf-8', errors='ignore').strip('\x00').strip()
+        self.stream_status_updated.emit(val)
         
     def send_command(self, cmd_string):
         if self.loop and self.client and self.client.is_connected:
@@ -556,12 +565,15 @@ class RealTimeScreen(QWidget):
         self.btn_stop.setObjectName("btnStop")
         self.btn_stop.setMinimumHeight(40)
         self.btn_wifi = QPushButton("Send WiFi")
-        self.btn_wifi.setMinimumHeight(40)
+        self.btn_wifi.setMinimumHeight(40)        
+        self.btn_stream = QPushButton("Stream")
+        self.btn_stream.setMinimumHeight(40)
         self.btn_ota = QPushButton("Start OTA")
         self.btn_ota.setObjectName("btnOTA")
         self.btn_ota.setMinimumHeight(40)
         self.btn_start.clicked.connect(self.on_start)
         self.btn_stop.clicked.connect(self.on_stop)
+        self.btn_stream.clicked.connect(self.on_stream)
         self.btn_wifi.clicked.connect(self.on_wifi_send)
         self.btn_ota.clicked.connect(self.on_ota)
         btn_layout.addWidget(self.btn_start)
@@ -569,6 +581,7 @@ class RealTimeScreen(QWidget):
         btn_layout.addWidget(self.btn_wifi)
         btn_layout.addWidget(self.btn_ota)
         layout.addLayout(btn_layout)
+        btn_layout.addWidget(self.btn_stream)
         
         # Hardware Controls
         hw_layout = QHBoxLayout()
@@ -735,6 +748,7 @@ class RealTimeScreen(QWidget):
         self.ble_thread.mmwave_updated.connect(self.process_mmwave)
         self.ble_thread.rgb_chunk_received.connect(self.process_rgb_chunk)
         self.ble_thread.ir_chunk_received.connect(self.process_ir_chunk)
+        self.ble_thread.stream_status_updated.connect(self.on_stream_status_update)
         self.ble_thread.start()
         
     def on_connect(self):
@@ -777,6 +791,20 @@ class RealTimeScreen(QWidget):
         if self.ble_thread and self.ble_thread.isRunning():
             self.ble_thread.send_command(cmd)
         self.log_text.append("> Device Stopped")
+
+    def on_stream(self):
+        cmd = "Com;Stream"
+        if self.ble_thread and self.ble_thread.isRunning():
+            self.ble_thread.send_command(cmd)
+            self.log_text.append("> Stream command sent. Waiting for status...")
+        else:
+            self.log_text.append("> Error: Device not connected!")
+
+    def on_stream_status_update(self, status):
+        if status == '1':
+            self.log_text.append("> WiFi stream in progress...")
+        elif status == '0':
+            self.log_text.append("> WiFi stream finished.")
     
     def on_wifi_send(self):
         wifi = self.input_wifi.text()
