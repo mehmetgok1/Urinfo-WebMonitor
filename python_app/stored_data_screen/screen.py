@@ -904,13 +904,16 @@ class StoredDataScreen(QWidget):
             
             # Remove DC offset for clearer FFT
             chunk_centered = chunk.astype(np.float32) - np.mean(chunk)
-            
+            mean_chunk = np.mean(chunk)
             # Compute FFT over the entire dataset
-            n = len(chunk_centered)
+            window = np.hanning(len(chunk_centered))
+            chunk_windowed = chunk_centered * window
+            n = len(chunk_windowed)
             sample_rate = 2000.0
-            freqs = np.fft.rfftfreq(n, d=1/sample_rate) # 2kHz Sample Rate
-            fft_mag = np.abs(np.fft.rfft(chunk_centered))
-            
+            freqs = np.fft.rfftfreq(n, d=1/sample_rate)
+            fft_mag = np.abs(np.fft.rfft(chunk_windowed))
+            fft_mag_db = 20 * np.log10(np.maximum(fft_mag, 1e-10))
+
             # Find the peak frequency
             peak_idx = np.argmax(fft_mag[1:]) + 1
             peak_freq = freqs[peak_idx]
@@ -920,21 +923,22 @@ class StoredDataScreen(QWidget):
             plt.subplots_adjust(bottom=0.15, hspace=0.3) 
             
             # Top subplot: Time domain
-            ax1.plot(chunk, color='#58a6ff')
+            ax1.plot(chunk_centered, color='#58a6ff',label=f'(Mean: {mean_chunk:.1f} mV)')
             ax1.set_title("Entire Microphone Waveform (Full Session)")
             ax1.set_xlabel("Sample Index @ 2kHz")
             ax1.set_ylabel("Millivolts (mV)")
             ax1.grid(True, alpha=0.3)
+            ax1.legend(loc='upper right') # Or wherever fits best
             
             # The red vertical line that will track playback position
             tracker_line = ax1.axvline(x=0, color='r', linestyle='-', linewidth=2, visible=False)
             
             # Bottom subplot: Frequency domain (FFT)
-            ax2.plot(freqs, fft_mag, color='#39d353')
+            ax2.plot(freqs[1:], fft_mag_db[1:], color='#39d353')
             ax2.set_title(f"Frequency Spectrum (FFT) - Dominant Frequency: {peak_freq:.1f} Hz")
             ax2.set_xlabel("Frequency (Hz)")
-            ax2.set_ylabel("Magnitude")
-            ax2.set_yscale('log')  # Use logarithmic scale to reveal hidden quiet frequencies!
+            ax2.set_ylabel("Magnitude (dB)")
+            ax2.set_yscale('linear')  # Use logarithmic scale to reveal hidden quiet frequencies!
             ax2.axvline(x=peak_freq, color='r', linestyle='--', alpha=0.5, label=f"Peak: {peak_freq:.1f} Hz")
             ax2.legend()
             ax2.grid(True, alpha=0.3)
