@@ -66,7 +66,7 @@ combined_packet_dtype = np.dtype([
     ('accelX_samples', 'i2', (400,)), 
     ('accelY_samples', 'i2', (400,)),
     ('accelZ_samples', 'i2', (400,)),
-    ('microphoneSamples', 'u2', (400,)),
+    ('microphoneSamples', 'u2', (2000,)),
     ('rgbFrame', 'u2', (4096,)), 
     ('irFrame', 'u2', (192,))
 ])
@@ -237,7 +237,7 @@ class DataLoaderThread(QThread):
                     is_valid = True
                     if sample_count != 400: is_valid = False
                     if not (0.0 <= bat <= 100.0): is_valid = False
-                    if not (-40.0 <= temp <= 125.0): is_valid = False
+                    #if not (-40.0 <= temp <= 125.0): is_valid = False
 
                     if not is_valid:
                         recovered = False
@@ -909,7 +909,7 @@ class StoredDataScreen(QWidget):
             window = np.hanning(len(chunk_centered))
             chunk_windowed = chunk_centered * window
             n = len(chunk_windowed)
-            sample_rate = 2000.0
+            sample_rate = 10000.0
             freqs = np.fft.rfftfreq(n, d=1/sample_rate)
             fft_mag = np.abs(np.fft.rfft(chunk_windowed))
             fft_mag_db = 20 * np.log10(np.maximum(fft_mag, 1e-10))
@@ -923,9 +923,9 @@ class StoredDataScreen(QWidget):
             plt.subplots_adjust(bottom=0.15, hspace=0.3) 
             
             # Top subplot: Time domain
-            ax1.plot(chunk_centered, color='#58a6ff',label=f'(Mean: {mean_chunk:.1f} mV)')
+            ax1.plot(chunk, color='#58a6ff',label=f'(Mean: {mean_chunk:.1f} mV)')
             ax1.set_title("Entire Microphone Waveform (Full Session)")
-            ax1.set_xlabel("Sample Index @ 2kHz")
+            ax1.set_xlabel("Sample Index @ 10kHz")
             ax1.set_ylabel("Millivolts (mV)")
             ax1.grid(True, alpha=0.3)
             ax1.legend(loc='upper right') # Or wherever fits best
@@ -973,7 +973,7 @@ class StoredDataScreen(QWidget):
                 # 3. Clip any extreme peaks to prevent speaker distortion
                 audio = np.clip(audio, -1.0, 1.0)
                     
-                sd.play(audio, samplerate=2000)
+                sd.play(audio, samplerate=10000)
                 
                 playback_state['playing'] = True
                 playback_state['start_time'] = time.time()
@@ -998,7 +998,7 @@ class StoredDataScreen(QWidget):
                 if playback_state['playing']:
                     # Calculate how many samples should have passed based on real time
                     elapsed = time.time() - playback_state['start_time']
-                    current_sample = int(elapsed * 2000) # 2kHz rate
+                    current_sample = int(elapsed * 10000) # 10kHz rate
                     
                     if current_sample >= len(chunk):
                         # Playback finished naturally

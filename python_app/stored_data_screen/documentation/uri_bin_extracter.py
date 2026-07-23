@@ -27,7 +27,7 @@ combined_packet_dtype = np.dtype([
     ('accelX_samples', 'i2', (400,)), 
     ('accelY_samples', 'i2', (400,)),
     ('accelZ_samples', 'i2', (400,)),
-    ('microphoneSamples', 'u2', (400,)),
+    ('microphoneSamples', 'u2', (2000,)),
     ('rgbFrame', 'u2', (4096,)),  # 64x64
     ('irFrame', 'u2', (192,))     # 16x12
 ])
@@ -35,7 +35,7 @@ combined_packet_dtype = np.dtype([
 PACKET_SIZE = combined_packet_dtype.itemsize # 24633 bytes
 
 # AYARLAR
-session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/20260709_075527/"
+session_path = "/media/deso/disk/20260723_195246KBr"
 session_id = os.path.basename(session_path)
 output_base = os.path.join("./processed_sessions", session_id)
 
