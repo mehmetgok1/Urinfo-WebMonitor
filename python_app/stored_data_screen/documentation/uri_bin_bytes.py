@@ -35,7 +35,7 @@ PACKET_SIZE = combined_packet_dtype.itemsize # 24633 bytes
 # Calculate internal byte offsets for the report header
 offsets = {name: combined_packet_dtype.fields[name][1] for name in combined_packet_dtype.names}
 
-session_path = "/media/deso/disk/20260723_195246KBr"
+session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/20260723_201819KBr/"
 report_path = "./packet_boundary_report.txt"
 
 bin_files = sorted([f for f in os.listdir(session_path) if f.endswith(".bin")])

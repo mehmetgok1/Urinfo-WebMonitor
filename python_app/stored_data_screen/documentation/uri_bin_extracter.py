@@ -35,7 +35,7 @@ combined_packet_dtype = np.dtype([
 PACKET_SIZE = combined_packet_dtype.itemsize # 24633 bytes
 
 # AYARLAR
-session_path = "/media/deso/disk/20260723_195246KBr"
+session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/20260723_201819KBr/"
 session_id = os.path.basename(session_path)
 output_base = os.path.join("./processed_sessions", session_id)
 
@@ -133,9 +133,12 @@ with open(sensor_csv_path, 'w', newline='') as f_sensor, \
                                packet['humidity'], packet['ambientLight_slave']])
 
             # --- B. ACCEL & MIC (CSV) ---
-            for j in range(400):
-                writer_m.writerow([ts, packet['accelX_samples'][j], packet['accelY_samples'][j], 
-                                   packet['accelZ_samples'][j], packet['microphoneSamples'][j]])
+            for j in range(2000):
+                if j < 400:
+                    writer_m.writerow([ts, packet['accelX_samples'][j], packet['accelY_samples'][j], 
+                                       packet['accelZ_samples'][j], packet['microphoneSamples'][j]])
+                else:
+                    writer_m.writerow([ts, 0,0, 0, packet['microphoneSamples'][j]])  # 400 accel sample + 1600 mic sample
 
             # --- C. RGB IMAGE (PNG) ---
             try:
