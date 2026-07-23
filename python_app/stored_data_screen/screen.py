@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLa
 from PyQt5.QtCore import QPoint, Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QColor, QPainter, QPen, QPainterPath
 import re
+import sounddevice as sd
 
 DARK_STYLE = """
     QWidget {
@@ -887,37 +888,46 @@ class StoredDataScreen(QWidget):
         else:
             self.timer.stop()
             self.btn_play.setText("Play Video")
-
     def plot_audio(self):
         if self.audio_data is None or len(self.audio_data) == 0:
             return
             
         try:
-            import matplotlib.pyplot as plt # 200ms of data at 2kHz is 400 samples
-            start_idx = self.current_frame * 400
-            end_idx = start_idx + 400
-            chunk = self.audio_data[start_idx:end_idx]
+            import matplotlib.pyplot as plt 
+            from matplotlib.widgets import Button
+            import matplotlib.animation as animation
+            import time
+            import sounddevice as sd
+            
+            # Use the entire array 
+            chunk = self.audio_data
             
             # Remove DC offset for clearer FFT
             chunk_centered = chunk.astype(np.float32) - np.mean(chunk)
             
-            # Compute FFT
+            # Compute FFT over the entire dataset
             n = len(chunk_centered)
-            freqs = np.fft.rfftfreq(n, d=1/2000.0) # 2kHz Sample Rate
+            sample_rate = 2000.0
+            freqs = np.fft.rfftfreq(n, d=1/sample_rate) # 2kHz Sample Rate
             fft_mag = np.abs(np.fft.rfft(chunk_centered))
             
-            # Find the peak frequency (ignoring the DC bin at index 0 just in case)
+            # Find the peak frequency
             peak_idx = np.argmax(fft_mag[1:]) + 1
             peak_freq = freqs[peak_idx]
             
+            # Create figure and leave room at the bottom for buttons
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+            plt.subplots_adjust(bottom=0.15, hspace=0.3) 
             
             # Top subplot: Time domain
             ax1.plot(chunk, color='#58a6ff')
-            ax1.set_title(f"Microphone Waveform (Frame {self.current_frame})")
-            ax1.set_xlabel("Sample Index @ 2kHz (1 second)")
+            ax1.set_title("Entire Microphone Waveform (Full Session)")
+            ax1.set_xlabel("Sample Index @ 2kHz")
             ax1.set_ylabel("Millivolts (mV)")
             ax1.grid(True, alpha=0.3)
+            
+            # The red vertical line that will track playback position
+            tracker_line = ax1.axvline(x=0, color='r', linestyle='-', linewidth=2, visible=False)
             
             # Bottom subplot: Frequency domain (FFT)
             ax2.plot(freqs, fft_mag, color='#39d353')
@@ -929,7 +939,79 @@ class StoredDataScreen(QWidget):
             ax2.legend()
             ax2.grid(True, alpha=0.3)
             
-            plt.tight_layout()
+            # --- UI BUTTONS & INTERACTIVITY ---
+            # Define axes for the buttons (Left, Bottom, Width, Height)
+            ax_play = plt.axes([0.35, 0.03, 0.12, 0.06])
+            ax_stop = plt.axes([0.55, 0.03, 0.12, 0.06])
+            
+            btn_play = Button(ax_play, 'Play Audio')
+            btn_stop = Button(ax_stop, 'Stop Audio')
+            
+            # Dictionary to hold state variables for the animation tracker
+            playback_state = {'playing': False, 'start_time': 0}
+            
+            def play_clicked(event):
+                if playback_state['playing']:
+                    return  # Prevent multiple clicks from starting overlapping audio
+                
+                # Audio prep
+                audio = self.audio_data.astype(np.float32)
+                
+                # 1. Remove DC offset (centers the wave on zero)
+                audio -= np.mean(audio)
+                
+                # 2. FIXED VOLUME SCALING: 
+                # Instead of auto-amplifying the noise floor to 1.0 (100% volume), 
+                # we divide by a fixed expected peak. 
+                # (Increase 500.0 if it is still too loud, decrease if it is too quiet)
+                audio = audio / 500.0 
+                
+                # 3. Clip any extreme peaks to prevent speaker distortion
+                audio = np.clip(audio, -1.0, 1.0)
+                    
+                sd.play(audio, samplerate=2000)
+                
+                playback_state['playing'] = True
+                playback_state['start_time'] = time.time()
+                tracker_line.set_visible(True)
+
+            def stop_clicked(event):
+                sd.stop()
+                playback_state['playing'] = False
+                tracker_line.set_visible(False)
+                fig.canvas.draw_idle()
+
+            # Stop audio if the user closes the plot window entirely
+            def on_close(event):
+                sd.stop()
+
+            btn_play.on_clicked(play_clicked)
+            btn_stop.on_clicked(stop_clicked)
+            fig.canvas.mpl_connect('close_event', on_close)
+            
+            # --- ANIMATION LOOP ---
+            def update_tracker(frame):
+                if playback_state['playing']:
+                    # Calculate how many samples should have passed based on real time
+                    elapsed = time.time() - playback_state['start_time']
+                    current_sample = int(elapsed * 2000) # 2kHz rate
+                    
+                    if current_sample >= len(chunk):
+                        # Playback finished naturally
+                        playback_state['playing'] = False
+                        tracker_line.set_visible(False)
+                    else:
+                        # Move the red line to the new X coordinate
+                        tracker_line.set_xdata([current_sample])
+                return tracker_line,
+
+            # Matplotlib requires animations and buttons to have persisting variables, 
+            # otherwise its garbage collector destroys them instantly. We bind them to 'fig'.
+            fig._btn_play = btn_play 
+            fig._btn_stop = btn_stop
+            fig._ani = animation.FuncAnimation(fig, update_tracker, interval=50, blit=True, cache_frame_data=False)
+
             plt.show()
+            
         except ImportError:
             QMessageBox.warning(self, "Missing Library", "Please install matplotlib to plot data:\npip install matplotlib")
