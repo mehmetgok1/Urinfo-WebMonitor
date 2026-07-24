@@ -36,14 +36,14 @@ combined_packet_dtype = np.dtype([
 PACKET_SIZE = combined_packet_dtype.itemsize # 15033 bytes
 
 
-session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/HotWaterVolume/20260724_141650K422Br20/"
+session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/HotWaterVolume/20260724_142142K420Br60/"
 items = session_path.split('/')
 if items[-1] == "": 
     items.pop(-1)
 
 session_path = "/" + "/".join(items)
 session_id = os.path.basename(session_path)
-output_base = os.path.join("./processed_sessions", session_id)
+output_base = os.path.join("./extracted_sessions", session_id)
 
 # Remove existing folder if present
 if os.path.exists(output_base):

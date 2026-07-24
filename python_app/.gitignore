@@ -1,4 +1,4 @@
-stored_data_screen/documentation/processed_sessions/
+stored_data_screen/documentation/extracted_sessions/
 received_sessions/
 .venv/
 build/
@@ -7,3 +7,4 @@ main.spec
 trial/
 stored_data_screen/documentation/denem_data
 stored_data_screen/documentation/packet_boundary_report.txt
+stored_data_screen/documentation/processed_data
