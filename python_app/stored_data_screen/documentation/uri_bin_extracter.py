@@ -35,8 +35,10 @@ combined_packet_dtype = np.dtype([
 
 PACKET_SIZE = combined_packet_dtype.itemsize # 15033 bytes
 
-
+#### USER EDIT
 session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/HotWaterVolume/20260724_142142K420Br60/"
+### USER EDIT END
+
 items = session_path.split('/')
 if items[-1] == "": 
     items.pop(-1)
@@ -63,6 +65,7 @@ for d in dirs.values(): os.makedirs(d, exist_ok=True)
 
 sensor_csv_path = os.path.join(dirs["sensors"], "all_sensors.csv")
 motion_csv_path = os.path.join(dirs["motion_audio"], "accel_mic_stream.csv")
+mic_csv_path = os.path.join(dirs["motion_audio"], "microphone_stream.csv")
 
 print(f"session is processing: {session_id}")
 
@@ -78,18 +81,21 @@ first_sequence_bool = True
 last_sequence = None 
 
 with open(sensor_csv_path, 'w', newline='') as f_sensor, \
-     open(motion_csv_path, 'w', newline='') as f_motion:
-    
+     open(motion_csv_path, 'w', newline='') as f_motion, \
+     open(mic_csv_path, 'w', newline='') as f_mic:
+
+
     writer_s = csv.writer(f_sensor)
-    writer_m = csv.writer(f_motion)
+    writer_motion = csv.writer(f_motion)
+    writer_mic    = csv.writer(f_mic)
 
     writer_s.writerow(["timestamp_ms", "sequence", "battery_pct", "ambLight_M", "PIR", "mmWave_dist", "temp", "humi", "ambLight_S"])
-    writer_m.writerow(["timestamp_ms","sequence", "accelX", "accelY", "accelZ", "mic"])
+    writer_motion.writerow(["timestamp_ms","sequence", "accelX", "accelY", "accelZ"])
+    writer_mic.writerow(["timestamp_ms","sequence", "microphoneSamples"])
 
     for bin_file in bin_files:
         full_path = os.path.join(session_path, bin_file)
         
-        # Dosya boyutunu kontrol et
         file_size = os.path.getsize(full_path)
         expected_packets = file_size // PACKET_SIZE
         print(f"\nProcessing file: {bin_file} | Size: {file_size} bytes | Expected Packets: {expected_packets}")
@@ -152,12 +158,11 @@ with open(sensor_csv_path, 'w', newline='') as f_sensor, \
                                packet['humidity'], packet['ambientLight_slave']])
 
             # --- B. ACCEL & MIC (CSV) ---
+            for j in range(400):
+                writer_motion.writerow([ts, seq-first_sequence+1, packet['accelX_samples'][j], 
+                                        packet['accelY_samples'][j], packet['accelZ_samples'][j]])
             for j in range(2000):
-                if j < 400:
-                    writer_m.writerow([ts,seq-first_sequence+1, packet['accelX_samples'][j], packet['accelY_samples'][j], 
-                                       packet['accelZ_samples'][j], packet['microphoneSamples'][j]])
-                else:
-                    writer_m.writerow([ts, seq-first_sequence+1,0, 0, packet['microphoneSamples'][j]])  # 400 accel sample + 1600 mic sample
+                    writer_mic.writerow([ts, seq-first_sequence+1, packet['microphoneSamples'][j]])  # 400 accel sample + 1600 mic sample
 
             # --- C. RGB IMAGE (PNG) ---
             try:

@@ -4,8 +4,8 @@ import cv2
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import heapq
 # 20260724_141650K422Br20  20260724_141927K425Br40  20260724_142142K420Br60
-
 #######################
 #########IR CAMERA EXTRACTOR AND PLOTTER#########
 #######################
@@ -35,15 +35,23 @@ for file in file_list:
     sequence += 1
 
 ir_data_cube = np.array(matrices)
-print(f"Successfully loaded {ir_data_cube.shape[0]} files.")
-
 target_w = 256
 target_h = 192
 results = []
-
-for idx, matrix in enumerate(ir_data_cube):
+maxtempidx = []
+# 1. Get the max value of each matrix across the datacube
+matrix_maxes = [np.max(m) for m in ir_data_cube]
+# 2. Get the top 3 highest values
+top_3 = heapq.nlargest(3, ((np.max(m), idx) for idx, m in enumerate(ir_data_cube)))
+for idx, (temp, matrix_idx) in enumerate(top_3, 1):
+    print(f"Top {idx}: Max Temp = {temp}, Matrix Index = {matrix_idx+1}")
+origx=[]
+origy=[]
+radius=[]
+for idx, (temp, matrix_idx) in enumerate(top_3, 1):
+    matrix = ir_data_cube[np.asarray(matrix_idx).item()]
     h, w = matrix.shape
-    
+
     min_temp = np.min(matrix)
     max_temp = np.max(matrix)
     
@@ -55,7 +63,6 @@ for idx, matrix in enumerate(ir_data_cube):
         (target_w, target_h),
         interpolation=cv2.INTER_CUBIC      
     )
-    
     _, thresh = cv2.threshold(
         display_gray,
         0,
@@ -82,11 +89,13 @@ for idx, matrix in enumerate(ir_data_cube):
         
     scale_x = target_w / w
     scale_y = target_h / h
-    
+
     orig_x = center_x_scaled / scale_x
     orig_y = center_y_scaled / scale_y
     radius_raw = radius_scaled / scale_x 
-    
+    origx.append(orig_x)
+    origy.append(orig_y)
+    radius.append(radius_raw)
     mask = np.zeros((h, w), dtype=np.uint8)
     cv2.circle(
         mask,
@@ -95,8 +104,30 @@ for idx, matrix in enumerate(ir_data_cube):
         255,
         -1
     )
+# 1. Calculate the averaged circle properties ONCE
+circle_x = sum(origx) / len(origx)
+circle_y = sum(origy) / len(origy)
+circle_radius = sum(radius) / len(radius)
+print(f"found circle is at x={circle_x}, y={circle_y}, radius={circle_radius}")
+# 2. Get matrix dimensions from the first frame to pre-build the static mask
+h, w = ir_data_cube[0].shape
+# 3. Create the fixed mask ONCE outside the loop
+fixed_mask = np.zeros((h, w), dtype=np.uint8)
+cv2.circle(
+    fixed_mask,
+    (int(circle_x), int(circle_y)),
+    max(1, int(circle_radius)),
+    255,
+    -1
+)
+# 4. Loop through frames directly
+results = []
+for idx, matrix in enumerate(ir_data_cube):
+    min_temp = np.min(matrix)
+    max_temp = np.max(matrix)
     
-    avg_circle_temp = cv2.mean(matrix.astype(np.float32), mask=mask)[0]
+    # Calculate average temperature using the pre-built mask directly
+    avg_circle_temp = cv2.mean(matrix.astype(np.float32), mask=fixed_mask)[0]
     
     results.append({
         'Sequence': sequences[idx],
@@ -106,45 +137,6 @@ for idx, matrix in enumerate(ir_data_cube):
     })
 
 df_results = pd.DataFrame(results)
-print("\nProcessing Results (Head):")
-print(df_results.head(10))
-
-# --- Plotting the Results ---
-
-fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
-
-# 1. Highest Temperature Plot
-ax1.plot(df_results['Sequence'], df_results['Max_Temp'], color='red', label='Highest Temp')
-ax1.set_ylabel('Temperature (°C)')
-ax1.set_title(f'Highest Temperature per Frame ({session_id})')
-ax1.grid(True, linestyle='--', alpha=0.7)
-ax1.legend(loc='upper right')
-
-# 2. Lowest Temperature Plot
-ax2.plot(df_results['Sequence'], df_results['Min_Temp'], color='blue', label='Lowest Temp')
-ax2.set_ylabel('Temperature (°C)')
-ax2.set_title(f'Lowest Temperature per Frame ({session_id})')
-ax2.grid(True, linestyle='--', alpha=0.7)
-ax2.legend(loc='upper right')
-
-# 3. Average Circle Temperature Plot
-ax3.plot(df_results['Sequence'], df_results['Avg_Circle_Temp'], color='green', label='Avg Circle Temp')
-ax3.set_xlabel('Frame Sequence')
-ax3.set_ylabel('Temperature (°C)')
-ax3.set_title(f'Average Hotspot (Circle) Temperature per Frame ({session_id})')
-ax3.grid(True, linestyle='--', alpha=0.7)
-ax3.legend(loc='upper right')
-
-plt.tight_layout()
-
-
-save_filename = f"{session_id}_temperature_plot.png"
-save_path = os.path.join("processed_data/", save_filename)
-
-# Save the plot
-plt.savefig(save_path, dpi=300, bbox_inches='tight')
-print(f"\nPlot successfully saved to: {save_path}")
-
 
 # --- NEW: Save the raw data to CSV for later comparison ---
 csv_filename = f"{session_id}_temperature_data.csv"
@@ -152,46 +144,36 @@ csv_path = os.path.join("processed_data/", csv_filename)
 df_results.to_csv(csv_path, index=False)
 print(f"Data successfully saved to: {csv_path}")
 
-# --- Existing: Save the plot image ---
-save_filename = f"{session_id}_temperature_plot.png"
-save_path = os.path.join("processed_data/", save_filename)
-
-plt.savefig(save_path, dpi=300, bbox_inches='tight')
-print(f"Plot successfully saved to: {save_path}")
-
-#plt.show()
-
-
 #######################
 #########MIC PLOTTER#########
 #######################
 # --- MIC PLOTTER DATA PREP ---
 # 20260724_141650K422Br20  20260724_141927K425Br40  20260724_142142K420Br60
 
-mic_file = "extracted_sessions/20260724_141650K422Br20/accel_mic/accel_mic_stream.csv"
+# mic_file = "extracted_sessions/20260724_141650K422Br20/accel_mic/accel_mic_stream.csv"
 
-# Extract the session_id from the filepath (the "middle guy")
-path_parts = os.path.normpath(mic_file).split(os.sep)
-session_id = path_parts[-3] # Grabs '20260724_142142K420Br60'
+# # Extract the session_id from the filepath (the "middle guy")
+# path_parts = os.path.normpath(mic_file).split(os.sep)
+# session_id = path_parts[-3] # Grabs '20260724_142142K420Br60'
 
-# 1. Load the CSV
-df = pd.read_csv(mic_file)
+# # 1. Load the CSV
+# df = pd.read_csv(mic_file)
 
-# 2. Grab just the 'mic' column as a raw list of numbers
-raw_mic_data = df['mic'].values
+# # 2. Grab just the 'mic' column as a raw list of numbers
+# raw_mic_data = df['mic'].values
 
-# 3. Chop it into blocks of 2000! 
-# The -1 tells numpy to figure out how many rows to make automatically based on the data length.
-mic_data_matrix = raw_mic_data.reshape(-1, 2000)
+# # 3. Chop it into blocks of 2000! 
+# # The -1 tells numpy to figure out how many rows to make automatically based on the data length.
+# mic_data_matrix = raw_mic_data.reshape(-1, 2000)
 
-print(f"Matrix created! Shape is: {mic_data_matrix.shape} (Sequences, Mic Samples)")
+# print(f"Matrix created! Shape is: {mic_data_matrix.shape} (Sequences, Mic Samples)")
 
-# 4. Save this matrix to a clean new CSV with the session ID in the name
-# Create the processed_data directory if it doesn't already exist
-os.makedirs("processed_data", exist_ok=True)
+# # 4. Save this matrix to a clean new CSV with the session ID in the name
+# # Create the processed_data directory if it doesn't already exist
+# os.makedirs("processed_data", exist_ok=True)
 
-output_filepath = f"processed_data/{session_id}_processed_mic_matrix.csv"
-processed_df = pd.DataFrame(mic_data_matrix)
-processed_df.to_csv(output_filepath, index=False, header=False)
+# output_filepath = f"processed_data/{session_id}_processed_mic_matrix.csv"
+# processed_df = pd.DataFrame(mic_data_matrix)
+# processed_df.to_csv(output_filepath, index=False, header=False)
 
-print(f"Successfully saved to: {output_filepath}")
+# print(f"Successfully saved to: {output_filepath}")
