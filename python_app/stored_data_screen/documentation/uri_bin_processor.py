@@ -11,7 +11,7 @@ import heapq
 #########IR CAMERA EXTRACTOR AND PLOTTER#########
 #######################
 # Define the path to your folder
-folder_path = "extracted_sessions/20260727_174540K426Br100/irimage/"
+folder_path = "extracted_sessions/20260727_172928K428Br20/irimage/"
 path_parts = os.path.normpath(folder_path).split(os.sep)
 session_id = path_parts[-2]  # Grabs '20260724_142142K420Br60'
 # Find all CSV files matching the pattern
@@ -109,6 +109,10 @@ for idx, (temp, matrix_idx) in enumerate(top_3, 1):
 circle_x = sum(origx) / len(origx)
 circle_y = sum(origy) / len(origy)
 circle_radius = sum(radius) / len(radius)
+circle_radius_80per = circle_radius * 0.8
+circle_radius_60per = circle_radius * 0.6
+circle_radius_40per = circle_radius * 0.4
+circle_radius_20per = circle_radius * 0.2
 print(f"found circle is at x={circle_x}, y={circle_y}, radius={circle_radius}")
 # 2. Get matrix dimensions from the first frame to pre-build the static mask
 h, w = ir_data_cube[0].shape
@@ -121,6 +125,38 @@ cv2.circle(
     255,
     -1
 )
+fixed_mask_80per = np.zeros((h, w), dtype=np.uint8)
+cv2.circle(
+    fixed_mask_80per,
+    (int(circle_x), int(circle_y)),
+    max(1, int(circle_radius_80per)),
+    255,
+    -1
+)
+fixed_mask_60per = np.zeros((h, w), dtype=np.uint8)
+cv2.circle(
+    fixed_mask_60per,
+    (int(circle_x), int(circle_y)),
+    max(1, int(circle_radius_60per)),
+    255,
+    -1
+)
+fixed_mask_40per = np.zeros((h, w), dtype=np.uint8)
+cv2.circle(
+    fixed_mask_40per,
+    (int(circle_x), int(circle_y)),
+    max(1, int(circle_radius_40per)),
+    255,    
+    -1
+)
+fixed_mask_20per = np.zeros((h, w), dtype=np.uint8)
+cv2.circle(
+    fixed_mask_20per,
+    (int(circle_x), int(circle_y)),
+    max(1, int(circle_radius_20per)),
+    255,    
+    -1
+)
 # 4. Loop through frames directly
 results = []
 for idx, matrix in enumerate(ir_data_cube):
@@ -129,12 +165,19 @@ for idx, matrix in enumerate(ir_data_cube):
     
     # Calculate average temperature using the pre-built mask directly
     avg_circle_temp = cv2.mean(matrix.astype(np.float32), mask=fixed_mask)[0]
-    
+    avg_circle_temp_80per = cv2.mean(matrix.astype(np.float32), mask=fixed_mask_80per)[0]
+    avg_circle_temp_60per = cv2.mean(matrix.astype(np.float32), mask=fixed_mask_60per)[0]
+    avg_circle_temp_40per = cv2.mean(matrix.astype(np.float32), mask=fixed_mask_40per)[0]
+    avg_circle_temp_20per = cv2.mean(matrix.astype(np.float32), mask=fixed_mask_20per)[0]
     results.append({
         'Sequence': sequences[idx],
         'Min_Temp': round(min_temp, 2),
         'Max_Temp': round(max_temp, 2),
-        'Avg_Circle_Temp': round(avg_circle_temp, 2)
+        'Avg_Circle_Temp': round(avg_circle_temp, 2),
+        'Avg_Circle_Temp_80per': round(avg_circle_temp_80per, 2),
+        'Avg_Circle_Temp_60per': round(avg_circle_temp_60per, 2),
+        'Avg_Circle_Temp_40per': round(avg_circle_temp_40per, 2),
+        'Avg_Circle_Temp_20per': round(avg_circle_temp_20per, 2)
     })
 
 df_results = pd.DataFrame(results)
