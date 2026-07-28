@@ -5,12 +5,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import heapq
-# 20260724_141650K422Br20  20260724_141927K425Br40  20260724_142142K420Br60
-#######################
+#20260727_172928K428Br20  20260727_173615K436Br60  20260727_174540K426Br100
+#20260727_173239K434Br40  20260727_174047K422Br80
+# #######################
 #########IR CAMERA EXTRACTOR AND PLOTTER#########
 #######################
 # Define the path to your folder
-folder_path = "extracted_sessions/20260724_142142K420Br60/irimage/"
+folder_path = "extracted_sessions/20260727_174540K426Br100/irimage/"
 path_parts = os.path.normpath(folder_path).split(os.sep)
 session_id = path_parts[-2]  # Grabs '20260724_142142K420Br60'
 # Find all CSV files matching the pattern

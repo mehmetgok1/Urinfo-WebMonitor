@@ -34,9 +34,11 @@ combined_packet_dtype = np.dtype([
 ])
 
 PACKET_SIZE = combined_packet_dtype.itemsize # 15033 bytes
+#20260727_172928K428Br20  20260727_173615K436Br60  20260727_174540K426Br100
+#20260727_173239K434Br40  20260727_174047K422Br80
 
 #### USER EDIT
-session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/HotWaterVolume/20260724_142142K420Br60/"
+session_path = "/home/deso/delete/Urinfo-WebMonitor/python_app/stored_data_screen/documentation/denem_data/BaseWater100mL_HotWaterfrom20to100mL/20260727_174540K426Br100/"
 ### USER EDIT END
 
 items = session_path.split('/')
