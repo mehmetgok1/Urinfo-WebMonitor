@@ -1,24 +1,17 @@
-import os
-import glob
 import cv2
 import numpy as np
 import pandas as pd
 import heapq
+from pathlib import Path
 
-#20260727_172928K428Br20 20260727_173615K436Br60 20260727_174540K426Br100
-
-#20260727_173239K434Br40 20260727_174047K422Br80
-# Define the path to your folder
-folder_path = "extracted_sessions/20260727_173239K434Br40/irimage/"
-path_parts = os.path.normpath(folder_path).split(os.sep)
-session_id = path_parts[-2]
-
-file_pattern = os.path.join(folder_path, "ir_*_*.csv")
-file_list = glob.glob(file_pattern)
+# 1. Use Path to handle OS-specific slashes automatically
+folder_path = Path("extracted_sessions/20260727_174540K426Br100/irimage")
+# e.g., parent is "20260727_174540K426Br100", name is the string.
+session_id = folder_path.parent.name
+file_list = list(folder_path.glob("ir_*_*.csv"))
 
 def extract_sequence(filepath):
-    filename = os.path.basename(filepath)
-    seq_str = filename.split('_')[-1].replace('.csv', '')
+    seq_str = filepath.stem.split('_')[-1] #list according to sequence number last portion after _
     return int(seq_str)
 
 file_list.sort(key=extract_sequence)
@@ -32,27 +25,25 @@ for file in file_list:
     sequences.append(sequence)
     sequence += 1
 
-ir_data_cube = np.array(matrices)
+ir_data_cube = np.array(matrices) ##make matrices 3d 
 
-# Target high-resolution dimensions
 target_w = 256
 target_h = 192
 
-# 1. Upscale all IR frames in the datacube upfront
+# Upscale all IR frames in the datacube upfront
 upscaled_cube = np.array([
     cv2.resize(m, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
     for m in ir_data_cube
 ])
 
-# 2. Get top 3 highest peak frames from the raw data
+# Get top 3 highest peak frames from the raw data
 top_3 = heapq.nlargest(3, ((np.max(m), idx) for idx, m in enumerate(ir_data_cube)))
 
 origx_scaled = []
 origy_scaled = []
 radius_scaled_list = []
 
-# 3. Find center and radius in HIGH-RES (256x192) space directly
-for idx, (temp, matrix_idx) in enumerate(top_3, 1):
+for temp, matrix_idx in top_3:
     display_gray = upscaled_cube[matrix_idx]
     
     min_temp = np.min(display_gray)
@@ -83,7 +74,7 @@ for idx, (temp, matrix_idx) in enumerate(top_3, 1):
     origy_scaled.append(cy)
     radius_scaled_list.append(r)
 
-# 4. Averaged center and radius (all in 256x192 space!)
+# Averaged center and radius (all in 256x192 space!)
 circle_x = sum(origx_scaled) / len(origx_scaled)
 circle_y = sum(origy_scaled) / len(origy_scaled)
 circle_radius = sum(radius_scaled_list) / len(radius_scaled_list)
@@ -96,18 +87,18 @@ r100 = circle_radius
 
 print(f"High-res circle at x={circle_x:.2f}, y={circle_y:.2f}, radius={circle_radius:.2f}px")
 
-# 5. Continuous float distance matrix on the 256x192 grid
+# Continuous float distance matrix on the 256x192 grid
 y_grid, x_grid = np.ogrid[:target_h, :target_w]
-dist_map = np.sqrt((x_grid - circle_x)**2 + (y_grid - circle_y)**2)
+distance_map = np.sqrt((x_grid - circle_x)**2 + (y_grid - circle_y)**2) ##calculate all points distance from center of circle of 192*256 array
 
-# Build floating-point donut masks directly (no integer truncation!)
-mask_0_20   = dist_map <= r20
-mask_20_40  = (dist_map > r20) & (dist_map <= r40)
-mask_40_60  = (dist_map > r40) & (dist_map <= r60)
-mask_60_80  = (dist_map > r60) & (dist_map <= r80)
-mask_80_100 = (dist_map > r80) & (dist_map <= r100)
+# Build floating-point donut masks directly
+mask_0_20   = distance_map <= r20
+mask_20_40  = (distance_map > r20) & (distance_map <= r40)
+mask_40_60  = (distance_map > r40) & (distance_map <= r60)
+mask_60_80  = (distance_map > r60) & (distance_map <= r80)
+mask_80_100 = (distance_map > r80) & (distance_map <= r100)
 
-# 6. Extract temperature statistics across upscaled frames
+# Extract temperature statistics across upscaled frames
 results = []
 for idx in range(len(ir_data_cube)):
     raw_matrix = ir_data_cube[idx]
@@ -126,8 +117,13 @@ for idx in range(len(ir_data_cube)):
 
 df_results = pd.DataFrame(results)
 
-os.makedirs("processed_data", exist_ok=True)
-csv_filename = f"{session_id}_temperature_data.csv"
-csv_path = os.path.join("processed_data/", csv_filename)
-df_results.to_csv(csv_path, index=False)
-print(f"Data successfully saved to: {csv_path}")
+# 2. OS-Safe directory creation and Windows file-lock handling
+out_dir = Path("processed_data")
+out_dir.mkdir(exist_ok=True)
+csv_path = out_dir / f"{session_id}_temperature_data.csv"
+
+try:
+    df_results.to_csv(csv_path, index=False)
+    print(f"Data successfully saved to: {csv_path}")
+except PermissionError:
+    print(f"ERROR: Permission denied. If you are on Windows, ensure '{csv_path.name}' is not open in Excel.")
