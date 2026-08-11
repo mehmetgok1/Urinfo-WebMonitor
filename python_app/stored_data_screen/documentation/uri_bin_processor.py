@@ -5,8 +5,11 @@ import heapq
 from pathlib import Path
 
 # 1. Use Path to handle OS-specific slashes automatically
-folder_path = Path("extracted_sessions/20260727_174540K426Br100/irimage")
-# e.g., parent is "20260727_174540K426Br100", name is the string.
+#  20260727_172928K428Br20  20260727_173615K436Br60
+#  20260727_173239K434Br40  20260727_174047K422Br80 20260727_174540K426Br100 
+
+folder_path = Path("extracted_sessions/20260727_172928K428Br20/irimage")
+# e.g., parent is "20260727_172928K428Br20", name is the string.
 session_id = folder_path.parent.name
 file_list = list(folder_path.glob("ir_*_*.csv"))
 
@@ -127,3 +130,4 @@ try:
     print(f"Data successfully saved to: {csv_path}")
 except PermissionError:
     print(f"ERROR: Permission denied. If you are on Windows, ensure '{csv_path.name}' is not open in Excel.")
+    
